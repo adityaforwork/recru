@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   User,
   Mail,
@@ -15,9 +15,10 @@ import {
   Plus,
   Trash2,
   Building,
+  ArrowLeft,
 } from "lucide-react";
 
-export default function CreateCandidate({ onSuccess, onCancel }) {
+export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -37,11 +38,13 @@ export default function CreateCandidate({ onSuccess, onCancel }) {
     highestEducation: "",
     candidateNotes: "",
   });
-
+  // useStates
   const [skills, setSkills] = useState(["React.js", "Tailwind CSS"]);
   const [currentSkill, setCurrentSkill] = useState("");
   const [resumeFile, setResumeFile] = useState(null);
+  const [candidates, setCandidates] = useState([]);
 
+  // input handler
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -50,6 +53,7 @@ export default function CreateCandidate({ onSuccess, onCancel }) {
     }));
   };
 
+ // add skills handler
   const handleAddSkill = (e) => {
     e.preventDefault();
     if (currentSkill.trim() && !skills.includes(currentSkill.trim())) {
@@ -58,41 +62,125 @@ export default function CreateCandidate({ onSuccess, onCancel }) {
     }
   };
 
+  // remove skills handler
   const handleRemoveSkill = (skillToRemove) => {
     setSkills(skills.filter((skill) => skill !== skillToRemove));
   };
 
+  // file chnage handler
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setResumeFile(e.target.files[0]);
     }
   };
 
-  const handleSubmit = (e) => {
+  // handle submit
+    const handleSubmit = async (e) => {
     e.preventDefault();
-    const candidateData = {
-      ...formData,
-      skills,
-      resumeFileName: resumeFile ? resumeFile.name : null,
-      submittedAt: new Date().toISOString(),
-    };
 
-    console.log("Candidate Registered:", candidateData);
-    alert("Candidate added successfully!");
-    if (onSuccess) onSuccess();
+    try {
+      const submitData = new FormData();
+
+      // React state -> SQL column mapping
+      submitData.append('first_name', formData.firstName);
+      submitData.append('last_name', formData.lastName);
+      submitData.append('email', formData.email);
+      submitData.append('phone', formData.phone);
+      submitData.append('current_location', formData.currentCity);
+      submitData.append('highest_qualification', formData.highestEducation);
+      submitData.append('applied_role', formData.appliedRole);
+      submitData.append('current_employer', formData.currentCompany);
+      submitData.append('experience_years', formData.experienceYears);
+      submitData.append('current_ctc', formData.currentSalary);
+      submitData.append('expected_ctc', formData.expectedSalary);
+      submitData.append('notice_period', formData.noticePeriod);
+      submitData.append('application_source', formData.source);
+      submitData.append('linkedin_url', formData.linkedinUrl);
+      submitData.append('portfolio_url', formData.portfolioUrl);
+      submitData.append('recruiter_notes', formData.candidateNotes);
+      
+      // Important: Skills are need to send in json string
+      submitData.append('skills', JSON.stringify(skills));
+
+      // Resume file
+      if (resumeFile) {
+        submitData.append('resume', resumeFile);
+      }
+
+      const url = candidateId ? `http://localhost:5000/api/candidates/${candidateId}` : 'http://localhost:5000/api/candidates';
+      const response = await fetch(url, {
+        method: candidateId ? 'PUT' : 'POST',
+        body: submitData,
+      });
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('Candidate added successfully! ID: ' + result.id);
+        console.log(result);
+        if (onSuccess) onSuccess();
+      } else {
+        alert('Error: ' + result.error);
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert('Server error, check console');
+    }
   };
+
+// // agar candidateId hai to edit mode
+  useEffect(() => {
+    if(candidateId){
+      fetch(`http://localhost:5000/api/candidates/${candidateId}`)
+      .then(r => r.json())
+      .then(data => {
+          setFormData({
+            firstName: data.first_name || "",
+            lastName: data.last_name || "",
+            email: data.email || "",
+            phone: data.phone || "",
+            currentCity: data.current_location || "",
+            appliedRole: data.applied_role || "",
+            currentCompany: data.current_employer || "",
+            experienceYears: data.experience_years || "",
+            currentSalary: data.current_ctc || "",
+            expectedSalary: data.expected_ctc || "",
+            noticePeriod: data.notice_period || "Immediate",
+            source: data.application_source || "LinkedIn",
+            portfolioUrl: data.portfolio_url || "",
+            linkedinUrl: data.linkedin_url || "",
+            highestEducation: data.highest_qualification || "",
+            candidateNotes: data.recruiter_notes || "",
+            currentDesignation: "",
+          });
+          if(data.skills){
+            setSkills(data.skills.split(",").filter(Boolean));
+          }
+        });
+    }
+  }, [candidateId]);
+
+ 
+
 
   return (
     <div className="w-full bg-gray-50/50 p-4 sm:p-6 lg:p-10">
+       <button
+      type="button"
+      onClick={onCancel}
+      className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Back to Candidates
+    </button>
       <div className="w-full bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
         {/* Header */}
         <div className="border-b border-gray-200 bg-white px-6 py-6 sm:px-10">
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Add New Candidate
+            {candidateId ? "Update Candidate Details" : "Create New Candidate"}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Enter candidate profile details, work history, and attach
-            application documents.
+            {candidateId ? "Update candidate profile details, work history, and attach application documents." : "Enter candidate profile details, work history, and attach application documents."}
           </p>
         </div>
 
@@ -504,7 +592,7 @@ export default function CreateCandidate({ onSuccess, onCancel }) {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
             >
               <CheckCircle2 className="h-4 w-4" />
-              Save Candidate Profile
+              {candidateId ? "Update Details" : "Save New Candidate"}
             </button>
           </div>
         </form>

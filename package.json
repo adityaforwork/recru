@@ -1,0 +1,28 @@
+{
+  "name": "recru",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "server": "cd backend && node server.js",
+    "client": "cd recru && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
+
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adityamishras/recru.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/adityamishras/recru/issues"
+  },
+  "homepage": "https://github.com/adityamishras/recru#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

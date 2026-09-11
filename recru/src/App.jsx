@@ -8,6 +8,8 @@ import Dashboard from "./Pages/Dashboard";
 import Candidates from "./Pages/Candidates/Candidates";
 import Vacancies from "./Pages/Vacancies/Vacancies";
 import Interviews from "./Pages/Interviews";
+import SearchPage from "./Pages/Search";
+import ApplicationsList from "./Pages/Applications/ApplicationsList";
 
 export default function App() {
   return (
@@ -25,6 +27,8 @@ export default function App() {
                 <Route path="/candidates" element={<Candidates />} />
                 <Route path="/vacancies" element={<Vacancies />} />
                 <Route path="/interviews" element={<Interviews />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/applications" element={<ApplicationsList/>} />
               </Routes>
             </div>
           </main>

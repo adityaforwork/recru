@@ -1,122 +1,143 @@
-import React from "react";
-import { ArrowRight } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ArrowRight, Loader2, Briefcase, Users, UserCheck, CalendarCheck, TrendingUp, Building2, Clock } from "lucide-react";
 
-const stats = [
-  { label: "Open Jobs", value: 12 },
-  { label: "Candidates", value: 486 },
-  { label: "Interviews", value: 18 },
-];
-
-const pipelineStages = ["Applied", "Screening", "Interview", "Offer", "Hired"];
-
-const recentApplications = [
-  {
-    candidate: "Rahul",
-    position: "Software",
-    status: "Interview",
-    date: "Aug 29",
-  },
-  {
-    candidate: "Priya",
-    position: "HR Exec",
-    status: "Screening",
-    date: "Aug 28",
-  },
-];
+const API_BASE = "http://localhost:5000/api";
+const STAGES = ['Applied','Screening','Interview','Offer','Hired','Rejected','On Hold'];
 
 export default function Dashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeStage, setActiveStage] = useState('Screening');
+
+  useEffect(() => {
+    async function fetchDashboard() {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard`);
+        const json = await res.json();
+        setData(json);
+        // Auto active stage jisme sabse zyada ho
+        if(json.pipeline?.length){
+          const max = [...json.pipeline].sort((a,b)=>b.count-a.count)[0];
+          if(max.count > 0) setActiveStage(max.stage);
+        }
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
+    }
+    fetchDashboard();
+  }, []);
+
+  if (loading) {
+    return <main className="flex-1 bg-[#f8fafc] p-8 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /> <span className="ml-2 text-sm">Loading dashboard...</span></main>
+  }
+
+  const stats = data?.stats || {};
+  const pipeline = data?.pipeline || STAGES.map(s=>({stage:s,count:0}));
+
+  const statCards = [
+    { label: "Open Jobs", value: stats.openJobs, sub: `${stats.totalVacancies} total`, icon: Briefcase, color: "bg-blue-600", light: "bg-blue-50 text-blue-600" },
+    { label: "Total Candidates", value: stats.totalCandidates, sub: `${stats.totalApplications} applications`, icon: Users, color: "bg-violet-600", light: "bg-violet-50 text-violet-600" },
+    { label: "In Interview", value: stats.interviews, sub: `${stats.screening} in screening`, icon: CalendarCheck, color: "bg-amber-500", light: "bg-amber-50 text-amber-600" },
+    { label: "Hired", value: stats.hired, sub: "This month", icon: UserCheck, color: "bg-emerald-600", light: "bg-emerald-50 text-emerald-600" },
+  ];
+
   return (
-    <main className="flex-1 bg-gray-50/50 p-8 space-y-8 overflow-y-auto">
-      {/* Welcome Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          Good Morning, Aditya <span className="text-2xl">👋</span>
-        </h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Here's what's happening with recruitment.
-        </p>
+    <main className="flex-1 bg-[#f8fafc] p-6 lg:p-8 space-y-6 overflow-y-auto min-h-screen">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text- font-bold tracking-tight text-gray-900">Good Morning, Aditya 👋</h1>
+          <p className="text- text-gray-500 mt-1">Here's what's happening with your hiring pipeline today.</p>
+        </div>
+        <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-white border px-3 py-1.5 rounded-full"><Clock className="w-3.5 h-3.5"/> {new Date().toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'short'})}</div>
       </div>
 
-      {/* Stats Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs hover:border-gray-300 transition-all"
-          >
-            <p className="text-sm font-medium text-gray-500">{stat.label}</p>
-            <p className="text-3xl font-bold text-gray-900 mt-2">
-              {stat.value}
-            </p>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((s) => (
+          <div key={s.label} className="bg-white border border-gray-200 rounded- p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group">
+            <div className="flex justify-between items-start">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.light}`}><s.icon className="w-5 h-5"/></div>
+              <TrendingUp className="w-4 h-4 text-gray-300 group-hover:text-green-500 transition-colors"/>
+            </div>
+            <p className="text- font-semibold tracking-widest text-gray-400 uppercase mt-4">{s.label}</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{s.value?? 0}</p>
+            <p className="text-xs text-gray-500 mt-1">{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Recruitment Pipeline Status */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs">
-        <h2 className="text-base font-semibold text-gray-900 mb-4">
-          Recruitment Pipeline
-        </h2>
-        <div className="flex flex-wrap items-center gap-3">
-          {pipelineStages.map((stage, index) => (
-            <React.Fragment key={stage}>
-              <div
-                className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                  index === 0
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 border border-gray-200"
-                }`}
-              >
-                {stage}
-              </div>
-              {index < pipelineStages.length - 1 && (
-                <ArrowRight className="h-4 w-4 text-gray-400 shrink-0" />
-              )}
-            </React.Fragment>
-          ))}
+      {/* Pipeline */}
+      <div className="bg-white border border-gray-200 rounded- p-6 shadow-xs">
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text- font-bold text-gray-900">Recruitment Pipeline</h2>
+          <span className="text-xs bg-gray-100 border px-2.5 py-1 rounded-full text-gray-600">{pipeline.reduce((a,b)=>a+b.count,0)} total in pipeline</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {pipeline.map((p, idx) => {
+            const isActive = activeStage === p.stage;
+            const isRejected = p.stage === 'Rejected';
+            const isOnHold = p.stage === 'On Hold';
+            return (
+              <React.Fragment key={p.stage}>
+                <button onClick={()=>setActiveStage(p.stage)}
+                  className={`relative px-4 py-2 rounded-full text- font-medium border transition-all flex items-center gap-2
+                  ${isActive? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200'
+                  : isRejected? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
+                  : isOnHold? 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'}`}>
+                  {p.stage}
+                  <span className={`min-w- h-5 px-1.5 flex items-center justify-center rounded-full text- font-bold ${isActive? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-700 border'}`}>{p.count}</span>
+                </button>
+                {idx < 4 && <ArrowRight className="h-3.5 w-3.5 text-gray-300" />}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
 
-      {/* Recent Applications Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">
-            Recent Applications
-          </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Applications */}
+        <div className="lg:col-span-2 bg-white border border-gray-200 rounded- shadow-xs overflow-hidden">
+          <div className="p-5 border-b flex justify-between items-center">
+            <h2 className="text- font-bold text-gray-900">Recent Applications • {activeStage}</h2>
+            <span className="text-xs text-blue-600 font-medium cursor-pointer">View all</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-">
+              <thead className="bg-gray-50/80 text- tracking-widest text-gray-400 uppercase"><tr><th className="py-3 px-5 font-semibold">Candidate</th><th className="py-3 px-5 font-semibold">Position</th><th className="py-3 px-5 font-semibold">Status</th><th className="py-3 px-5 font-semibold">Date</th></tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {(data?.recentApplications || []).filter(r=> activeStage? r.stage === activeStage : true).slice(0,5).map((row, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50/80">
+                    <td className="py-3.5 px-5 font-medium text-gray-900">{row.candidateName}</td>
+                    <td className="py-3.5 px-5 text-gray-600">{row.jobTitle}</td>
+                    <td className="py-3.5 px-5"><span className={`inline-flex px-2.5 py-1 rounded-full text- font-medium border ${row.stage==='Interview'?'bg-purple-50 text-purple-700 border-purple-200':row.stage==='Hired'?'bg-green-50 text-green-700 border-green-200':row.stage==='Rejected'?'bg-red-50 text-red-700 border-red-200':'bg-amber-50 text-amber-700 border-amber-200'}`}>{row.stage}</span></td>
+                    <td className="py-3.5 px-5 text-gray-500">{row.appliedAt? new Date(row.appliedAt).toLocaleDateString() : '-'}</td>
+                  </tr>
+                ))}
+                {(!data?.recentApplications || data.recentApplications.length===0) && <tr><td colSpan="4" className="py-10 text-center text-gray-400">No applications in {activeStage}</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50/75 border-b border-gray-200 text-gray-600">
-              <tr>
-                <th className="py-3.5 px-6 font-semibold">Candidate</th>
-                <th className="py-3.5 px-6 font-semibold">Position</th>
-                <th className="py-3.5 px-6 font-semibold">Status</th>
-                <th className="py-3.5 px-6 font-semibold">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {recentApplications.map((row, idx) => (
-                <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="py-3.5 px-6 font-medium text-gray-900">
-                    {row.candidate}
-                  </td>
-                  <td className="py-3.5 px-6 text-gray-600">{row.position}</td>
-                  <td className="py-3.5 px-6">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        row.status === "Interview"
-                          ? "bg-purple-50 text-purple-700 border border-purple-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                      }`}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-6 text-gray-500">{row.date}</td>
-                </tr>
+
+        {/* Department + Recent Vacancies */}
+        <div className="space-y-6">
+          <div className="bg-white border border-gray-200 rounded- p-5 shadow-xs">
+            <h2 className="text- font-bold flex items-center gap-2"><Building2 className="w-4 h-4"/> Department Wise</h2>
+            <div className="mt-4 space-y-3">
+              {(data?.departmentWise || []).map(d=>(
+                <div key={d.name} className="flex justify-between items-center"><span className="text- text-gray-600">{d.name}</span><div className="flex items-center gap-2"><div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-blue-600" style={{width:`${Math.min(d.value*20,100)}%`}}></div></div><span className="text-xs font-bold">{d.value}</span></div></div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded- p-5 shadow-xs">
+            <h2 className="text- font-bold">Open Vacancies</h2>
+            <div className="mt-4 space-y-3">
+              {(data?.recentVacancies || []).map(v=>(
+                <div key={v.id} className="flex justify-between items-center p-2.5 rounded-xl hover:bg-gray-50 border-transparent hover:border-gray-200 transition-colors"><div><p className="text- font-medium text-gray-900">{v.title}</p><p className="text- text-gray-500">{v.department} • {v.applicants} applicants</p></div><span className={`text- px-2 py-1 rounded-full border ${v.status==='Published'?'bg-green-50 text-green-700 border-green-200':'bg-gray-50 text-gray-600'}`}>{v.status}</span></div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </main>
