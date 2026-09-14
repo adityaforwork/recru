@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Mail, Phone, MapPin, Building, Link2, GraduationCap, Briefcase, IndianRupee, Clock, FileText, ExternalLink, Download, Calendar, Globe, User, Hash, Layers, ReceiptPoundSterling, FileUser } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building, Link2, GraduationCap, Briefcase, IndianRupee, Clock, FileText, ExternalLink, Download, Calendar, Globe, User, Hash, Layers, ReceiptPoundSterling, FileUser, Loader2 } from "lucide-react";
 import PdfFirstPagePreview from "../../Components/PdfFirstPagePreview";
 const formatCTC = (val) => {
   if (val === null || val === undefined || val === '' || isNaN(Number(val))) return '—';
@@ -20,7 +20,15 @@ export default function CandidateProfile({ candidateId, onBack, onEdit }) {
       });
   }, [candidateId]);
 
-  if (!candidate) return <div className="p-10 text-sm">Loading ID {candidateId}...</div>;
+  if (!candidate) 
+    return (
+    <div className="w-full h-[80vh] flex flex-col items-center justify-center gap-3 bg-slate-50/50">
+      <Loader2 className="w-8 h-8 animate-spin text-green-900" />
+      <p className="text-sm font-medium text-slate-500 animate-pulse">
+        Loading Candidate - {candidateId}
+      </p>
+    </div>
+  );
 
   // tumhare reference JSON se
   const resumeUrl = candidate.resume_path ? `http://localhost:5000/${candidate.resume_path}` : null;

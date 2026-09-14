@@ -17,7 +17,8 @@ import {
   Eye,
   Trash2,
   Pencil,
-  X
+  X,
+  Loader2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import BulkUploadModal from "./BulkUploadModal";
@@ -162,9 +163,16 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
     fetchCandidates();
   }, []);
 
-  // Loading dikhao
+  // Show Loading
   if (loading) {
-    return <div className="p-10 text-center">Loading candidates from DB...</div>
+    return (
+    <div className="w-full h-[80vh] flex flex-col items-center justify-center gap-3 bg-slate-50/50">
+      <Loader2 className="w-8 h-8 animate-spin text-green-900" />
+      <p className="text-sm font-medium text-slate-500 animate-pulse">
+        Loading candidates from DB...
+      </p>
+    </div>
+  );
   }
   // Multiple Select & Single Select Coding Logic
   const toggleOne = (id) => {

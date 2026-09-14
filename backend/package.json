@@ -7,16 +7,21 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": ["recruitment", "usha-yarns"],
+  "keywords": [
+    "recruitment",
+    "usha-yarns"
+  ],
   "author": "Aditya Mishra",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.12.2",
-    "mssql": "^12.7.0",
     "msnodesqlv8": "^5.3.0",
+    "mssql": "^12.7.0",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.3",
     "pdfjs-dist": "^3.11.174"

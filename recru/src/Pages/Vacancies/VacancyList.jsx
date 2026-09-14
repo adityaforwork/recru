@@ -105,8 +105,8 @@ export default function VacancyList({ onCreateNew, onEdit }) {
   if (loading) {
     return (
       <div className="w-full h-96 flex flex-col items-center justify-center gap-2 bg-gray-50/50">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-        <p className="text-sm text-gray-600">Loading from recru DB...</p>
+        <Loader2 className="h-6 w-6 animate-spin text-green-900" />
+        <p className="text-sm text-gray-600">Loading from DB...</p>
       </div>
     );
   }

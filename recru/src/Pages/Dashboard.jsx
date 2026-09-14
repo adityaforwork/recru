@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { ArrowRight, Loader2, Briefcase, Users, UserCheck, CalendarCheck, TrendingUp, Building2, Clock } from "lucide-react";
+import { AuthContext } from "../Context/AuthContext";
 
 const API_BASE = "http://localhost:5000/api";
 const STAGES = ['Applied','Screening','Interview','Offer','Hired','Rejected','On Hold'];
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeStage, setActiveStage] = useState('Screening');
   const getGreetings = greetings()
+  const {user, token} = useContext(AuthContext);
   useEffect(() => {
     async function fetchDashboard() {
       try {
@@ -31,12 +33,18 @@ export default function Dashboard() {
       finally { setLoading(false); }
     }
     fetchDashboard();
-  }, []);
+  }, [token]);
 
-  if (loading) {
-    return <main className="flex-1 bg-[#f8fafc] p-8 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /> <span className="ml-2 text-sm">Loading dashboard...</span></main>
-  }
-
+   if (loading) {
+     return (
+     <div className="w-full h-[80vh] flex flex-col items-center justify-center gap-3 bg-slate-50/50">
+       <Loader2 className="w-8 h-8 animate-spin text-green-900" />
+       <p className="text-sm font-medium text-slate-500 animate-pulse">
+         Loading Data From Database...
+       </p>
+     </div>
+   );
+   }
   const stats = data?.stats || {};
   const pipeline = data?.pipeline || STAGES.map(s=>({stage:s,count:0}));
 
@@ -52,7 +60,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text- font-bold tracking-tight text-gray-900">{getGreetings}, Aditya 👋</h1>
+          <h1 className="text- font-bold tracking-tight text-gray-900">{getGreetings}, {user.name} 👋</h1>
           <p className="text- text-gray-500 mt-1">Here's what's happening with your hiring pipeline today.</p>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-white border border-gray-200 px-3 py-1.5 rounded-full"><Clock className="w-3.5 h-3.5"/> {new Date().toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'short'})}</div>
@@ -108,7 +116,20 @@ export default function Dashboard() {
         {/* Recent Applications */}
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
           <div className="p-5 border-b flex justify-between items-center">
-            <h2 className="text- font-bold text-gray-900">Recent Applications • {activeStage}</h2>
+            <h2 className="text- font-bold text-gray-900">Recent Applications • <strong className={`${
+              (() =>{
+                switch(activeStage){
+                  case 'Applied': return 'text-blue-500'
+                  case 'Screening' : return 'text-yellow-500'
+                  case 'Interview' : return 'text-blue-500'
+                  case 'Offer' : return 'text-pink-500'
+                  case 'Hired' : return 'text-green-500'
+                  case 'Rejected' : return 'text-red-500'
+                  case 'On Hold': return 'text-slate-500/65'
+
+                }
+              })()
+            }`}> {activeStage}</strong></h2>
             <span className="text-xs text-blue-600 font-medium cursor-pointer">View all</span>
           </div>
           <div className="overflow-x-auto">

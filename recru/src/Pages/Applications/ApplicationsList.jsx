@@ -122,7 +122,7 @@ export default function ApplicationsList() {
   const filteredCandidates = candidates.filter(c => c.CurrentStage === activeStage);
 
   if (loading) {
-    return <div className="w-full h- flex flex-col items-center justify-center gap-2"><Loader2 className="w-6 h-6 animate-spin" /><span className="text-sm text-gray-500">Loading...</span></div>
+    return <div className="w-full h-[80vh] flex flex-col items-center justify-center gap-2"><Loader2 className="w-6 h-6 animate-spin" /><span className="text-sm text-gray-500">Loading...</span></div>
   }
 
   if (selectedVacancy) {

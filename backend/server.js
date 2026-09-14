@@ -28,7 +28,6 @@ const cors = require('cors')
 const sql = require('mssql/msnodesqlv8'); // for windows trusted connection 
 const { NVarChar } = require('msnodesqlv8');
 const multer = require('multer'); // for resume upload
-const companyRoutes = require('./company');
 //=================================================================================
 // ================================================================================
 //                                  Resume upload setup
@@ -39,13 +38,12 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
-
-
-
 const app = express();
 app.use(cors())
 app.use(express.json());
-
+app.use('/uploads', express.static('uploads')); // avatar ke liye
+const settingsRoute = require('./routes/settings')
+app.use('/api/settings', settingsRoute);
 // ==========================================================================================================
 // ==========================================================================================================
 //                                      1. DATABASE CONFIGURATION
@@ -1238,7 +1236,7 @@ app.get('/api/vacancies/:id/interview-applications', async (req, res) => {
     res.json(result.recordset);
   } catch (e) { res.status(500).json({ error: e.message }) }
 });
-app.use('/api/settings', companyRoutes);
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on http://localhost:${PORT}`);

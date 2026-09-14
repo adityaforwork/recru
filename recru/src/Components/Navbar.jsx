@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Search, Bell, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../Context/AuthContext";
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const {user, token} = useContext(AuthContext)
 
   return (
     <header className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 flex items-center justify-between sticky top-0 z-40 transition-all">
@@ -49,11 +51,11 @@ export default function Navbar() {
         <div className="flex items-center gap-2 cursor-pointer p-1.5 pr-2.5 rounded-full border border-transparent hover:border-gray-200/60 hover:bg-gray-50/80 transition-all duration-200 group">
           {/* Avatar with corporate green accent matching the company profile */}
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-green-800 to-emerald-600 text-white flex items-center justify-center font-semibold text-xs tracking-wide shadow-sm">
-            AD
+            {user?.name? user.name.split().map(n => n[0]).join("").toUpperCase() : "?"}
           </div>
           <div className="hidden md:flex flex-col items-start leading-none">
-            <span className="text-xs font-semibold text-gray-800 group-hover:text-green-900 transition-colors">Aditya</span>
-            <span className="text-[10px] text-gray-400 mt-0.5">Admin</span>
+            <span className="text-xs font-semibold text-gray-800 group-hover:text-green-900 transition-colors">{user.name}</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{user.role}</span>
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-gray-400 group-hover:text-gray-600 transition-all duration-200 group-hover:translate-y-0.5" />
         </div>
