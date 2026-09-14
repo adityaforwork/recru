@@ -85,6 +85,30 @@ router.delete('/users/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// PUT /api/settings/users/:id - Edit
+router.put('/users/:id', upload.single('avatar'), async (req, res) => {
+  const { name, email, mobile, role, password } = req.body;
+  const pool = await getPool();
+  let q = 'UPDATE users SET name=@name, email=@email, mobile=@mobile, role=@role, updated_at=GETDATE()';
+  const request = pool.request().input('name', sql.VarChar, name).input('email', sql.VarChar, email).input('mobile', sql.VarChar, mobile).input('role', sql.VarChar, role).input('id', sql.Int, req.params.id);
+  if (password) {
+    const hash = await bcrypt.hash(password, 10);
+    q += ', password=@password'; request.input('password', sql.VarChar, hash);
+  }
+  if (req.file) { q += ', avatar=@avatar'; request.input('avatar', sql.VarChar, `/uploads/avatars/${req.file.filename}`); }
+  q += ' WHERE id=@id';
+  await request.query(q);
+  const updated = await pool.request().input('id', sql.Int, req.params.id).query('SELECT id, name, email, mobile, role, avatar, is_blocked FROM users WHERE id=@id');
+  res.json(updated.recordset[0]);
+});
+
+// PATCH block/unblock
+router.patch('/users/:id/block', async (req, res) => {
+  const pool = await getPool();
+  await pool.request().input('id', sql.Int, req.params.id).query('UPDATE users SET is_blocked = CASE WHEN is_blocked=1 THEN 0 ELSE 1 END WHERE id=@id');
+  const r = await pool.request().input('id', sql.Int, req.params.id).query('SELECT is_blocked FROM users WHERE id=@id');
+  res.json(r.recordset[0]);
+});
 
 // ============== LOGIN ==============
 // POST /api/settings/login

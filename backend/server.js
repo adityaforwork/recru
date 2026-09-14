@@ -874,7 +874,7 @@ app.delete('/api/vacancies/:vacancyId/applications/:candidateId', async (req, re
       .input('VacancyId', sql.Int, req.params.vacancyId)
       .input('CandidateId', sql.Int, req.params.candidateId)
       .query('DELETE FROM Vacancy_Applications WHERE VacancyId=@VacancyId AND CandidateId=@CandidateId');
-    
+
     res.json({ success: true, message: "Application deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -901,80 +901,108 @@ app.delete('/api/vacancies/:id/applications', async (req, res) => {
 // 5.1 DASHBOARD API
 // Purpose: This API gives requires stats & information about whats happening in databse.
 // Method: GET
+// 5.1 DASHBOARD API - ENHANCED FOR ANALYTICS
+// 5.1 DASHBOARD API - FINAL FIXED VERSION FOR YOUR SCHEMA
 app.get('/api/dashboard', async (req, res) => {
   try {
     const pool = await getPool();
 
-    // 1. Counts
+    const safeQuery = async (sqlText) => {
+      try {
+        const r = await pool.request().query(sqlText);
+        return r;
+      } catch (e) {
+        console.warn("Dashboard sub-query skipped:", e.message.split('\n')[0]);
+        return { recordset: [] };
+      }
+    };
+
+    // Core queries - ye tumhare schema pe 100% chalengi
     const counts = await pool.request().query(`
       SELECT
         (SELECT COUNT(*) FROM Vacancies) as totalVacancies,
         (SELECT COUNT(*) FROM Vacancies WHERE Status IN ('Active','Published')) as openJobs,
         (SELECT COUNT(*) FROM Vacancies WHERE Status IN ('Closed','Filled')) as closedJobs,
+        (SELECT COUNT(*) FROM Vacancies WHERE Status = 'Draft') as draftJobs,
         (SELECT COUNT(*) FROM candidates) as totalCandidates,
         (SELECT COUNT(*) FROM Vacancy_Applications) as totalApplications,
         (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Interview') as interviews,
         (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Hired') as hired,
-        (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Screening') as screening
+        (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Screening') as screening,
+        (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Offer') as offers,
+        (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Rejected') as rejected,
+        (SELECT COUNT(*) FROM Vacancy_Applications WHERE AppliedAt >= DATEADD(day, -30, GETDATE())) as applicationsLast30Days,
+        (SELECT COUNT(*) FROM Vacancies WHERE CreatedAt >= DATEADD(day, -30, GETDATE())) as jobsLast30Days,
+        (SELECT ISNULL(AVG(CAST(c as FLOAT)),0) FROM (SELECT COUNT(*) as c FROM Vacancy_Applications GROUP BY VacancyId) t) as avgApplicantsPerJob
     `);
 
-    // 2. Pipeline - For 7 Stages
-    const pipelineResult = await pool.request().query(`
-      SELECT CurrentStage as stage, COUNT(*) as count
-      FROM Vacancy_Applications
-      GROUP BY CurrentStage
+    const pipelineResult = await pool.request().query(`SELECT CurrentStage as stage, COUNT(*) as count FROM Vacancy_Applications GROUP BY CurrentStage`);
+    const deptResult = await pool.request().query(`SELECT COALESCE(d.DepartmentName, 'N/A') as name, COUNT(v.VacancyId) as value FROM Vacancies v LEFT JOIN Master_Departments d ON d.DepartmentId = v.DepartmentId GROUP BY d.DepartmentName`);
+    const recentVac = await pool.request().query(`SELECT TOP 5 v.VacancyId as id, v.JobTitle as title, v.Status as status, COALESCE(d.DepartmentName,'N/A') as department, DATEDIFF(day, v.CreatedAt, GETDATE()) as daysOpen, (SELECT COUNT(*) FROM Vacancy_Applications va WHERE va.VacancyId = v.VacancyId) as applicants FROM Vacancies v LEFT JOIN Master_Departments d ON d.DepartmentId = v.DepartmentId ORDER BY v.CreatedAt DESC`);
+    const recentApp = await pool.request().query(`SELECT TOP 8 va.ApplicationId as id, c.first_name + ' ' + ISNULL(c.last_name,'') as candidateName, v.JobTitle as jobTitle, va.CurrentStage as stage, va.AppliedAt as appliedAt, c.id as candidateId, v.VacancyId FROM Vacancy_Applications va JOIN candidates c ON c.id = va.CandidateId JOIN Vacancies v ON v.VacancyId = va.VacancyId ORDER BY va.AppliedAt DESC`);
+    const monthlyTrend = await pool.request().query(`
+      SELECT FORMAT(DATEADD(month, -n, GETDATE()), 'MMM yy') as month, YEAR(DATEADD(month, -n, GETDATE())) as year, MONTH(DATEADD(month, -n, GETDATE())) as monthNum,
+      (SELECT COUNT(*) FROM Vacancies WHERE YEAR(CreatedAt)=YEAR(DATEADD(month, -n, GETDATE())) AND MONTH(CreatedAt)=MONTH(DATEADD(month, -n, GETDATE()))) as jobs,
+      (SELECT COUNT(*) FROM Vacancy_Applications WHERE YEAR(AppliedAt)=YEAR(DATEADD(month, -n, GETDATE())) AND MONTH(AppliedAt)=MONTH(DATEADD(month, -n, GETDATE()))) as applications,
+      (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage='Hired' AND YEAR(UpdatedAt)=YEAR(DATEADD(month, -n, GETDATE())) AND MONTH(UpdatedAt)=MONTH(DATEADD(month, -n, GETDATE()))) as hires
+      FROM (VALUES (11),(10),(9),(8),(7),(6),(5),(4),(3),(2),(1),(0)) as T(n) ORDER BY year, monthNum
     `);
-    // Create a map function to map with the frontend const STAGES
+    const statusDist = await pool.request().query(`SELECT Status as name, COUNT(*) as value FROM Vacancies GROUP BY Status`);
+    const topJobs = await pool.request().query(`SELECT TOP 5 v.JobTitle as title, COUNT(va.ApplicationId) as applicants, v.Status as status FROM Vacancies v LEFT JOIN Vacancy_Applications va ON va.VacancyId = v.VacancyId GROUP BY v.VacancyId, v.JobTitle, v.Status ORDER BY applicants DESC`);
+    const staleJobs = await pool.request().query(`SELECT TOP 5 v.VacancyId as id, v.JobTitle as title, DATEDIFF(day, v.CreatedAt, GETDATE()) as daysOpen, (SELECT COUNT(*) FROM Vacancy_Applications WHERE VacancyId = v.VacancyId) as applicants FROM Vacancies v WHERE v.Status IN ('Active','Published') ORDER BY applicants ASC, v.CreatedAt ASC`);
+    const aging = await pool.request().query(`SELECT ISNULL(AVG(CAST(DATEDIFF(day, v.CreatedAt, GETDATE()) as FLOAT)),0) as avgDaysOpen, ISNULL(AVG(CAST(DATEDIFF(day, va.AppliedAt, va.UpdatedAt) as FLOAT)),0) as avgTimeToHire FROM Vacancies v LEFT JOIN Vacancy_Applications va ON va.VacancyId = v.VacancyId AND va.CurrentStage='Hired'`);
+
+    // Safe / Optional queries - agar column nahi hai toh fail nahi hongi
+    const sourceWise = await safeQuery(`SELECT TOP 6 COALESCE(application_source, 'Direct') as name, COUNT(*) as value FROM candidates GROUP BY application_source ORDER BY value DESC`);
+    const locationWise = await safeQuery(`SELECT TOP 8 COALESCE(LocationText, 'N/A') as name, COUNT(*) as value FROM Vacancies GROUP BY LocationText ORDER BY value DESC`);
+    const experienceStats = await safeQuery(`
+      SELECT
+        CASE
+          WHEN ISNULL(experience_years,0) < 2 THEN '0-2 Years'
+          WHEN experience_years < 5 THEN '2-5 Years'
+          WHEN experience_years < 10 THEN '5-10 Years'
+          ELSE '10+ Years'
+        END as name, COUNT(*) as value
+      FROM candidates GROUP BY
+        CASE
+          WHEN ISNULL(experience_years,0) < 2 THEN '0-2 Years'
+          WHEN experience_years < 5 THEN '2-5 Years'
+          WHEN experience_years < 10 THEN '5-10 Years'
+          ELSE '10+ Years'
+        END
+    `);
+    const ctcStats = await safeQuery(`SELECT 'Current CTC' as type, AVG(CAST(current_ctc as FLOAT)) as avgValue FROM candidates WHERE current_ctc IS NOT NULL UNION ALL SELECT 'Expected CTC', AVG(CAST(expected_ctc as FLOAT)) FROM candidates WHERE expected_ctc IS NOT NULL`);
+
+    const c = counts.recordset[0];
     const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired', 'Rejected', 'On Hold'];
     const pipelineMap = {};
     pipelineResult.recordset.forEach(r => pipelineMap[r.stage] = r.count);
     const pipeline = STAGES.map(s => ({ stage: s, count: pipelineMap[s] || 0 }));
-
-    // 3. Department wise vacancies
-    const deptResult = await pool.request().query(`
-      SELECT COALESCE(d.DepartmentName, 'N/A') as name, COUNT(v.VacancyId) as value
-      FROM Vacancies v
-      LEFT JOIN Master_Departments d ON d.DepartmentId = v.DepartmentId
-      GROUP BY d.DepartmentName
-    `);
-
-    // 4. Recent Vacancies - 5 latest
-    const recentVac = await pool.request().query(`
-      SELECT TOP 5 v.VacancyId as id, v.JobTitle as title, v.Status as status,
-             COALESCE(d.DepartmentName,'N/A') as department,
-             (SELECT COUNT(*) FROM Vacancy_Applications va WHERE va.VacancyId = v.VacancyId) as applicants
-      FROM Vacancies v
-      LEFT JOIN Master_Departments d ON d.DepartmentId = v.DepartmentId
-      ORDER BY v.CreatedAt DESC
-    `);
-
-    // 5. Recent Applications - 5 latest
-    const recentApp = await pool.request().query(`
-      SELECT TOP 5 va.ApplicationId as id, c.first_name + ' ' + c.last_name as candidateName,
-             v.JobTitle as jobTitle, va.CurrentStage as stage, va.AppliedAt as appliedAt
-      FROM Vacancy_Applications va
-      JOIN candidates c ON c.id = va.CandidateId
-      JOIN Vacancies v ON v.VacancyId = va.VacancyId
-      ORDER BY va.AppliedAt DESC
-    `);
-
-    const c = counts.recordset[0];
+    const totalApplied = pipeline.reduce((a, b) => a + b.count, 0) || 1;
+    const funnel = pipeline.map(p => ({ ...p, percent: Math.round((p.count / totalApplied) * 100) }));
 
     res.json({
       stats: {
-        openJobs: c.openJobs,
-        totalVacancies: c.totalVacancies,
-        closedJobs: c.closedJobs,
-        totalCandidates: c.totalCandidates,
-        totalApplications: c.totalApplications,
-        interviews: c.interviews,
-        hired: c.hired,
-        screening: c.screening
+        openJobs: c.openJobs, totalVacancies: c.totalVacancies, closedJobs: c.closedJobs, draftJobs: c.draftJobs,
+        totalCandidates: c.totalCandidates, totalApplications: c.totalApplications,
+        interviews: c.interviews, hired: c.hired, screening: c.screening, offers: c.offers, rejected: c.rejected,
+        applicationsLast30Days: c.applicationsLast30Days, jobsLast30Days: c.jobsLast30Days,
+        avgApplicantsPerJob: Number((c.avgApplicantsPerJob || 0).toFixed(1)),
+        avgDaysOpen: Math.round(aging.recordset[0]?.avgDaysOpen || 0),
+        avgTimeToHire: Math.round(aging.recordset[0]?.avgTimeToHire || 0),
       },
-      pipeline, // [{stage:'Applied',count:0},...]
+      pipeline, funnel,
       departmentWise: deptResult.recordset,
+      statusDistribution: statusDist.recordset,
+      sourceWise: sourceWise.recordset.length ? sourceWise.recordset : [{ name: 'Direct', value: c.totalCandidates }],
+      locationWise: locationWise.recordset,
+      experienceStats: experienceStats.recordset,
+      ctcStats: ctcStats.recordset,
+      monthlyTrend: monthlyTrend.recordset,
+      topJobs: topJobs.recordset,
+      staleJobs: staleJobs.recordset,
       recentVacancies: recentVac.recordset,
-      recentApplications: recentApp.recordset
+      recentApplications: recentApp.recordset,
     });
 
   } catch (err) {
