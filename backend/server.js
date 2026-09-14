@@ -1,19 +1,42 @@
-//  requirements
+/**
+ * =================================================================================
+ * FILE: server.js
+ * PROJECT: USHA YARNS LTD - Recruitment Management System (RECRU)
+ * DB: SQL Server (U3IT2\BCDEMO) - Database: recru
+ * DRIVER: mssql/msnodesqlv8 with ODBC Driver 17 (Windows Authentication)
+ * PORT: 5000
+ * AUTHOR: Aditya Mishra
+ * LAST UPDATED: 2026-09-12
+ *
+ * STRUCTURE:
+ * 1. Config & Helpers (getPool)
+ * 2. Vacancy APIs
+ * 3. Candidate APIs
+ * 4. Application / Pipeline APIs (Screening, Interview, Offer, Hired)
+ * 5. Dashboard APIs
+ * 6. Global Search API
+ * 7. Interview Scheduling APIs
+ * =================================================================================
+ */
+// =================================================================================
+// =================================================================================
+//                                 Requirements & Initial Setup
+// =================================================================================
+// =================================================================================
 const express = require('express');
 const cors = require('cors')
-const sql = require('mssql/msnodesqlv8');
+const sql = require('mssql/msnodesqlv8'); // for windows trusted connection 
 const { NVarChar } = require('msnodesqlv8');
-const multer = require('multer');
-const nodemailer = require('nodemailer');
-require('dotenv').config();
-console.log("EMAIL_USER loaded:", process.env.EMAIL_USER ? "yes" : "NO - .env missing");
-
-//************************************************************
-// ------------------- */ Resume upload setup
-// ***********************************************************
+const multer = require('multer'); // for resume upload
+const companyRoutes = require('./company');
+//=================================================================================
+// ================================================================================
+//                                  Resume upload setup
+// ================================================================================
+// ================================================================================
 const storage = multer.diskStorage({
-    destination: 'uploads/',
-    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  destination: 'uploads/',
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
 
@@ -23,6 +46,16 @@ const app = express();
 app.use(cors())
 app.use(express.json());
 
+// ==========================================================================================================
+// ==========================================================================================================
+//                                      1. DATABASE CONFIGURATION
+// ==========================================================================================================
+// ==========================================================================================================
+/**
+ * dbConfig: SQL Server connection string
+ * IMPORTANT: Always use getPool() function, never use sql.connect() directly
+ * Reason: sql.connect() without config gives error "Cannot read properties of undefined (reading 'port')"
+ */
 const dbConfig = {
   connectionString: 'Driver={ODBC Driver 17 for SQL Server};Server=U3IT2\\BCDEMO;Database=recru;Trusted_Connection=yes;Encrypt=no;TrustServerCertificate=yes;',
 };
@@ -31,10 +64,14 @@ async function getPool() {
   return await sql.connect(dbConfig);
 }
 
-/* ************************************************** 
--------------------- VACANCY API CODING START
-***************************************************** */
-// 1. --------------------------------GET ALL MASTER DATA------------------------------------------------
+// ======================================================================================================
+// ======================================================================================================
+//                                      2. VACANCY APIs START 
+// ======================================================================================================
+// ======================================================================================================
+// 2.1 GET ALL VACANCY MASTER DATA 
+// URL: GET /api/masters
+// Purpose: Used for the dropdowns in vacancy form (Department, Skills, etc.)
 app.get('/api/masters', async (req, res) => {
   try {
     let pool = await getPool();
@@ -60,7 +97,9 @@ app.get('/api/masters', async (req, res) => {
   }
 });
 
-// 2. ---------------------CREATE VACANCY---------------------------------------------------------------------
+// 2.2 CREATE NEW VACANCY 
+// URL: POST /api/vacancies
+// Body: { jobTitle, department, employmentType, workspace, location, jobSummary,... }
 app.post('/api/vacancies', async (req, res) => {
   const { jobTitle, department, employmentType, workspace, location, jobSummary, experienceLevel, minSalary, maxSalary, currency, isSalaryPublic, responsibilities, qualifications, skills, status } = req.body;
   let pool; let transaction;
@@ -86,7 +125,7 @@ app.post('/api/vacancies', async (req, res) => {
     let expResult = await pool.request().input('exp', sql.NVarChar, experienceLevel).query("SELECT ExperienceLevelId FROM Master_ExperienceLevels WHERE LevelName=@exp");
     let experienceLevelId = expResult.recordset[0]?.ExperienceLevelId || 2;
 
-    // --- SALARY VALIDATION FIX ---
+    // SALARY VALIDATION
     let minVal = minSalary ? parseFloat(minSalary) : null;
     let maxVal = maxSalary ? parseFloat(maxSalary) : null;
 
@@ -102,7 +141,7 @@ app.post('/api/vacancies', async (req, res) => {
 
     //  Status Validation
     const allowedStatus = ['Active', 'Published', 'Draft', 'On Hold', 'Closed', 'Filled', 'Expired', 'Cancalled']
-    const finalStatus = allowedStatus.includes(status)? status: 'Active';
+    const finalStatus = allowedStatus.includes(status) ? status : 'Active';
 
     let vacancyResult = await new sql.Request(transaction)
       .input('jobTitle', sql.NVarChar, jobTitle)
@@ -112,8 +151,8 @@ app.post('/api/vacancies', async (req, res) => {
       .input('location', sql.NVarChar, location)
       .input('jobSummary', sql.NVarChar, jobSummary)
       .input('experienceLevelId', sql.Int, experienceLevelId)
-      .input('minSalary', sql.Decimal(12,2), minVal)
-      .input('maxSalary', sql.Decimal(12,2), maxVal)
+      .input('minSalary', sql.Decimal(12, 2), minVal)
+      .input('maxSalary', sql.Decimal(12, 2), maxVal)
       .input('currency', sql.Char(3), currency || 'INR')
       .input('isSalaryPublic', sql.Bit, isSalaryPublic ? 1 : 0)
       .input('status', sql.NVarChar, finalStatus)
@@ -150,7 +189,8 @@ app.post('/api/vacancies', async (req, res) => {
   }
 });
 
-// 3. ---------------------------------------GET ALL VACANCIES - FIXED ALIASES FOR FRONTEND-------------------------------------------------------
+// 2.3 GET ALL VACANCIES 
+// Purpose: For Vacancy List Page
 app.get('/api/vacancies', async (req, res) => {
   try {
     let pool = await getPool();
@@ -184,7 +224,9 @@ app.get('/api/vacancies', async (req, res) => {
   }
 });
 
-// 4. ----------------------------------------------GET SINGLE VACANCY WITH DETAILS----------------------------------------------------------------
+// 2.4 GET SINGLE VACANCY DETAIL
+// Purpose: To show single vacancy (for search and other)
+// Method: GET /api/vacancies/:id
 app.get('/api/vacancies/:id', async (req, res) => {
   try {
     let pool = await getPool();
@@ -221,6 +263,9 @@ app.get('/api/vacancies/:id', async (req, res) => {
   }
 });
 
+// 2.5 DELETE VACANCY
+// Purpose: When Vacancies are no longer available
+// Method: DELETE /api/vacancies/:id
 app.delete('/api/vacancies/:id', async (req, res) => {
   try {
     let pool = await getPool();
@@ -231,7 +276,10 @@ app.delete('/api/vacancies/:id', async (req, res) => {
   }
 });
 
-// 5. -------------------------------------------UPDATE VACANCY-----------------------------------------------------------------------------------------------------------
+
+// 2.6 Edit VACANCY
+// Purpose: When you want to edit an vacancy 
+// Method: PUT /api/vacancies/:id
 app.put('/api/vacancies/:id', async (req, res) => {
   const { jobTitle, department, employmentType, workspace, location, jobSummary, experienceLevel, minSalary, maxSalary, isSalaryPublic, responsibilities, qualifications, skills, status } = req.body;
   let pool; let transaction;
@@ -260,19 +308,19 @@ app.put('/api/vacancies/:id', async (req, res) => {
 
     // 1. MAIN TABLE UPDATE
     await new sql.Request(transaction)
-     .input('id', sql.Int, vacancyId)
-     .input('jobTitle', sql.NVarChar, jobTitle)
-     .input('departmentId', sql.Int, departmentId)
-     .input('employmentTypeId', sql.Int, employmentTypeId)
-     .input('workspaceId', sql.Int, workspaceId)
-     .input('location', sql.NVarChar, location)
-     .input('jobSummary', sql.NVarChar, jobSummary)
-     .input('experienceLevelId', sql.Int, experienceLevelId)
-     .input('minSalary', sql.Decimal(12,2), minSalary? parseFloat(minSalary) : null)
-     .input('maxSalary', sql.Decimal(12,2), maxSalary? parseFloat(maxSalary) : null)
-     .input('isSalaryPublic', sql.Bit, isSalaryPublic? 1 : 0)
-     .input('status', sql.NVarChar, status)
-     .query(`
+      .input('id', sql.Int, vacancyId)
+      .input('jobTitle', sql.NVarChar, jobTitle)
+      .input('departmentId', sql.Int, departmentId)
+      .input('employmentTypeId', sql.Int, employmentTypeId)
+      .input('workspaceId', sql.Int, workspaceId)
+      .input('location', sql.NVarChar, location)
+      .input('jobSummary', sql.NVarChar, jobSummary)
+      .input('experienceLevelId', sql.Int, experienceLevelId)
+      .input('minSalary', sql.Decimal(12, 2), minSalary ? parseFloat(minSalary) : null)
+      .input('maxSalary', sql.Decimal(12, 2), maxSalary ? parseFloat(maxSalary) : null)
+      .input('isSalaryPublic', sql.Bit, isSalaryPublic ? 1 : 0)
+      .input('status', sql.NVarChar, status)
+      .query(`
         UPDATE Vacancies SET
           JobTitle=@jobTitle, DepartmentId=@departmentId, EmploymentTypeId=@employmentTypeId,
           WorkspaceId=@workspaceId, LocationText=@location, JobSummary=@jobSummary,
@@ -289,12 +337,12 @@ app.put('/api/vacancies/:id', async (req, res) => {
     // Responsibilities
     if (responsibilities) {
       for (let i = 0; i < responsibilities.length; i++) {
-        if (responsibilities[i].trim()!== "") {
+        if (responsibilities[i].trim() !== "") {
           await new sql.Request(transaction)
-           .input('vacancyId', sql.Int, vacancyId)
-           .input('respText', sql.NVarChar, responsibilities[i])
-           .input('sortOrder', sql.Int, i + 1)
-           .query("INSERT INTO Vacancy_Responsibilities (VacancyId, ResponsibilityText, SortOrder) VALUES (@vacancyId, @respText, @sortOrder)");
+            .input('vacancyId', sql.Int, vacancyId)
+            .input('respText', sql.NVarChar, responsibilities[i])
+            .input('sortOrder', sql.Int, i + 1)
+            .query("INSERT INTO Vacancy_Responsibilities (VacancyId, ResponsibilityText, SortOrder) VALUES (@vacancyId, @respText, @sortOrder)");
         }
       }
     }
@@ -341,93 +389,92 @@ app.put('/api/vacancies/:id', async (req, res) => {
   }
 });
 
-// ************************************************** 
-//                VACANCY API CLOSED 
-//***************************************************
+// ==================================================================================================================
+// ==================================================================================================================
+//                                                  3. CANDIDATE API
+// ==================================================================================================================
+// ==================================================================================================================
 
-
-// **************************************************************************
-// **************************************************************************
-//                       CANDIDATE API
-// **************************************************************************
-// **************************************************************************
-
-// --- CREATE CANDIDATE API ---
+// 3.1 Candidate API
+// Purpose: Fetch Candidate Details
+// Method: POST
 app.use('/uploads', express.static('uploads'));
 app.post('/api/candidates', upload.single('resume'), async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const data = req.body;
+  try {
+    const pool = await sql.connect(dbConfig);
+    const data = req.body;
 
-        // skills frontend se JSON string me aayega -> '["React.js","Tailwind"]'
-        let skills = [];
-        try { skills = JSON.parse(data.skills || '[]'); } catch(e) { skills = [] }
+    // skills frontend se JSON string me aayega -> '["React.js","Tailwind"]'
+    let skills = [];
+    try { skills = JSON.parse(data.skills || '[]'); } catch (e) { skills = [] }
 
-        const resumePath = req.file? req.file.path : null;
+    const resumePath = req.file ? req.file.path : null;
 
-        // 1. Candidate Insert
-        const result = await pool.request()
-          .input('first_name', sql.VarChar, data.first_name)
-          .input('last_name', sql.VarChar, data.last_name)
-          .input('email', sql.VarChar, data.email)
-          .input('phone', sql.VarChar, data.phone)
-          .input('current_location', sql.VarChar, data.current_location)
-          .input('highest_qualification', sql.VarChar, data.highest_qualification)
-          .input('applied_role', sql.VarChar, data.applied_role)
-          .input('current_employer', sql.VarChar, data.current_employer)
-          .input('experience_years', sql.Decimal(4,1), data.experience_years || null)
-          .input('current_ctc', sql.Int, data.current_ctc || null)
-          .input('expected_ctc', sql.Int, data.expected_ctc || null)
-          .input('notice_period', sql.VarChar, data.notice_period)
-          .input('application_source', sql.VarChar, data.application_source)
-          .input('linkedin_url', sql.VarChar, data.linkedin_url)
-          .input('portfolio_url', sql.VarChar, data.portfolio_url)
-          .input('resume_path', sql.VarChar, resumePath)
-          .input('recruiter_notes', sql.VarChar, data.recruiter_notes)
-          .query(`
+    // 1. Candidate Insert
+    const result = await pool.request()
+      .input('first_name', sql.VarChar, data.first_name)
+      .input('last_name', sql.VarChar, data.last_name)
+      .input('email', sql.VarChar, data.email)
+      .input('phone', sql.VarChar, data.phone)
+      .input('current_location', sql.VarChar, data.current_location)
+      .input('highest_qualification', sql.VarChar, data.highest_qualification)
+      .input('applied_role', sql.VarChar, data.applied_role)
+      .input('current_employer', sql.VarChar, data.current_employer)
+      .input('experience_years', sql.Decimal(4, 1), data.experience_years || null)
+      .input('current_ctc', sql.Int, data.current_ctc || null)
+      .input('expected_ctc', sql.Int, data.expected_ctc || null)
+      .input('notice_period', sql.VarChar, data.notice_period)
+      .input('application_source', sql.VarChar, data.application_source)
+      .input('linkedin_url', sql.VarChar, data.linkedin_url)
+      .input('portfolio_url', sql.VarChar, data.portfolio_url)
+      .input('resume_path', sql.VarChar, resumePath)
+      .input('recruiter_notes', sql.VarChar, data.recruiter_notes)
+      .query(`
                 INSERT INTO candidates (first_name, last_name, email, phone, current_location, highest_qualification, applied_role, current_employer, experience_years, current_ctc, expected_ctc, notice_period, application_source, linkedin_url, portfolio_url, resume_path, recruiter_notes)
                 OUTPUT INSERTED.id
                 VALUES (@first_name, @last_name, @email, @phone, @current_location, @highest_qualification, @applied_role, @current_employer, @experience_years, @current_ctc, @expected_ctc, @notice_period, @application_source, @linkedin_url, @portfolio_url, @resume_path, @recruiter_notes)
             `);
 
-        const candidateId = result.recordset[0].id;
+    const candidateId = result.recordset[0].id;
 
-        // 2. Skills Loop
-        for (let name of skills) {
-            name = name.trim();
-            if(!name) continue;
+    // 2. Skills Loop
+    for (let name of skills) {
+      name = name.trim();
+      if (!name) continue;
 
-            let check = await pool.request().input('skill_name', sql.VarChar, name)
-                        .query('SELECT id FROM skills WHERE skill_name = @skill_name');
+      let check = await pool.request().input('skill_name', sql.VarChar, name)
+        .query('SELECT id FROM skills WHERE skill_name = @skill_name');
 
-            let skillId;
-            if (check.recordset.length > 0) {
-                skillId = check.recordset[0].id;
-            } else {
-                let newSkill = await pool.request().input('skill_name', sql.VarChar, name)
-                               .query('INSERT INTO skills (skill_name) OUTPUT INSERTED.id VALUES (@skill_name)');
-                skillId = newSkill.recordset[0].id;
-            }
+      let skillId;
+      if (check.recordset.length > 0) {
+        skillId = check.recordset[0].id;
+      } else {
+        let newSkill = await pool.request().input('skill_name', sql.VarChar, name)
+          .query('INSERT INTO skills (skill_name) OUTPUT INSERTED.id VALUES (@skill_name)');
+        skillId = newSkill.recordset[0].id;
+      }
 
-            await pool.request()
-               .input('candidate_id', sql.Int, candidateId)
-               .input('skill_id', sql.Int, skillId)
-               .query('IF NOT EXISTS (SELECT 1 FROM candidate_skills WHERE candidate_id=@candidate_id AND skill_id=@skill_id) INSERT INTO candidate_skills (candidate_id, skill_id) VALUES (@candidate_id, @skill_id)');
-        }
-
-        res.status(201).json({ success: true, id: candidateId, message: 'Candidate added successfully' });
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, error: err.message });
+      await pool.request()
+        .input('candidate_id', sql.Int, candidateId)
+        .input('skill_id', sql.Int, skillId)
+        .query('IF NOT EXISTS (SELECT 1 FROM candidate_skills WHERE candidate_id=@candidate_id AND skill_id=@skill_id) INSERT INTO candidate_skills (candidate_id, skill_id) VALUES (@candidate_id, @skill_id)');
     }
+
+    res.status(201).json({ success: true, id: candidateId, message: 'Candidate added successfully' });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// --- GET ALL CANDIDATES WITH PIPELINE STATUS - FIXED ---
+// 3.2 GET ALL CANDIDATES WITH PIPELINE STATUS - FIXED
+// Purpose: When you are fetching candidates on candidate list page you have to show the pipeline status, therefore you need to fetch this.So this API fetch CANDIDATES + PIPELINE STATUS
+// Mthod: GET 
 app.get('/api/candidates', async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query(`
+  try {
+    const pool = await sql.connect(dbConfig);
+    const result = await pool.request().query(`
             SELECT 
                 c.id, 
                 c.first_name, 
@@ -475,96 +522,96 @@ app.get('/api/candidates', async (req, res) => {
                 appCount.totalApplications
             ORDER BY c.id DESC
         `);
-        res.json(result.recordset);
-    } catch (err) {
-        console.error("CANDIDATES FETCH ERROR:", err);
-        res.status(500).json({ error: err.message, stack: err.stack });
-    }
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("CANDIDATES FETCH ERROR:", err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
-// **********************************************************************************************
-// ******************************** --- BULK UPLOAD API - USING EXCEL ---***************************
-// **********************************************************************************************
-// --- BULK UPLOAD API - FINAL FIXED ---
+// 3.3 BULK UPLOAD API - USING EXCEL
+// Purpose: When your excel parsed the parsed data upload in bulk in database so at that time this api is called. 
+// Method: POST /api/candidate/bulk
 app.post('/api/candidates/bulk', async (req, res) => {
-    const rows = req.body;
-    console.log('Bulk data received:', rows.length);
+  const rows = req.body;
+  console.log('Bulk data received:', rows.length);
 
-    if (!Array.isArray(rows) || rows.length === 0) {
-        return res.status(400).json({ error: 'Empty excel' });
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'Empty excel' });
+  }
+
+  try {
+    const pool = await sql.connect(dbConfig);
+    let inserted = 0;
+    let skipped = 0;
+    const seenEmails = new Set(); // Check duplicates in excel
+
+    for (const r of rows) {
+      // Both format is supported - First Name + firstName
+      const first_name = (r['First Name'] || r.firstName || '').toString().trim();
+      const last_name = (r['Last Name'] || r.lastName || '').toString().trim();
+      const email = (r['Email'] || r.email || '').toString().trim().toLowerCase();
+      const phone = (r['Phone'] || r.phone || '').toString().trim();
+      const city = (r['City'] || r.currentCity || '').toString().trim();
+      const applied_role = (r['Applied Role'] || r.appliedRole || '').toString().trim();
+      const current_employer = (r['Current Employer'] || r.currentCompany || '').toString().trim();
+      const exp = r['Experience (Years)'] || r.experienceYears || null;
+      const currCTC = r['Current CTC'] || r.currentSalary || null;
+      const expCTC = r['Expected CTC'] || r.expectedSalary || null;
+      const notice = (r['Notice Period'] || r.noticePeriod || '').toString().trim();
+      const source = (r['Source'] || r.source || 'Excel Bulk Upload').toString().trim();
+
+      let skillsRaw = r['Skills'] || r.skills || '';
+      if (Array.isArray(skillsRaw)) skillsRaw = skillsRaw.join(',');
+
+      if (!email || !first_name) { skipped++; continue; }
+      if (seenEmails.has(email)) { skipped++; continue; } // Same emails in excel
+      seenEmails.add(email);
+
+      //Is data already available in DB?
+      const dup = await pool.request().input('email', sql.VarChar, email)
+        .query('SELECT id FROM candidates WHERE email = @email');
+      if (dup.recordset.length > 0) { skipped++; continue; }
+
+      const result = await pool.request()
+        .input('first_name', sql.VarChar, first_name)
+        .input('last_name', sql.VarChar, last_name)
+        .input('email', sql.VarChar, email)
+        .input('phone', sql.VarChar, phone)
+        .input('current_location', sql.VarChar, city)
+        .input('applied_role', sql.VarChar, applied_role)
+        .input('current_employer', sql.VarChar, current_employer)
+        .input('experience_years', sql.Decimal(4, 1), exp)
+        .input('current_ctc', sql.Int, currCTC)
+        .input('expected_ctc', sql.Int, expCTC)
+        .input('notice_period', sql.VarChar, notice)
+        .input('application_source', sql.VarChar, source)
+        .query(`INSERT INTO candidates (first_name, last_name, email, phone, current_location, applied_role, current_employer, experience_years, current_ctc, expected_ctc, notice_period, application_source) OUTPUT INSERTED.id VALUES (@first_name, @last_name, @email, @phone, @current_location, @applied_role, @current_employer, @experience_years, @current_ctc, @expected_ctc, @notice_period, @application_source)`);
+
+      const candidateId = result.recordset[0].id;
+      inserted++;
+
+      const skillsArr = skillsRaw.toString().split(',').map(s => s.trim()).filter(Boolean);
+      for (let name of skillsArr) {
+        let sc = await pool.request().input('skill_name', sql.VarChar, name).query('SELECT id FROM skills WHERE skill_name=@skill_name');
+        let skillId = sc.recordset.length ? sc.recordset[0].id : (await pool.request().input('skill_name', sql.VarChar, name).query('INSERT INTO skills (skill_name) OUTPUT INSERTED.id VALUES (@skill_name)')).recordset[0].id;
+        await pool.request().input('candidate_id', sql.Int, candidateId).input('skill_id', sql.Int, skillId).query('INSERT INTO candidate_skills (candidate_id, skill_id) VALUES (@candidate_id, @skill_id)');
+      }
     }
 
-    try {
-        const pool = await sql.connect(dbConfig);
-        let inserted = 0;
-        let skipped = 0;
-        const seenEmails = new Set(); // Excel ke andar hi duplicate check
+    console.log(`Inserted: ${inserted}, Skipped: ${skipped}`);
+    res.json({ success: true, message: `${inserted} candidates imported successfully, ${skipped} skipped (duplicate email)` });
 
-        for (const r of rows) {
-            // Dono format support - First Name + firstName
-            const first_name = (r['First Name'] || r.firstName || '').toString().trim();
-            const last_name = (r['Last Name'] || r.lastName || '').toString().trim();
-            const email = (r['Email'] || r.email || '').toString().trim().toLowerCase();
-            const phone = (r['Phone'] || r.phone || '').toString().trim();
-            const city = (r['City'] || r.currentCity || '').toString().trim();
-            const applied_role = (r['Applied Role'] || r.appliedRole || '').toString().trim();
-            const current_employer = (r['Current Employer'] || r.currentCompany || '').toString().trim();
-            const exp = r['Experience (Years)'] || r.experienceYears || null;
-            const currCTC = r['Current CTC'] || r.currentSalary || null;
-            const expCTC = r['Expected CTC'] || r.expectedSalary || null;
-            const notice = (r['Notice Period'] || r.noticePeriod || '').toString().trim();
-            const source = (r['Source'] || r.source || 'Excel Bulk Upload').toString().trim();
-
-            let skillsRaw = r['Skills'] || r.skills || '';
-            if (Array.isArray(skillsRaw)) skillsRaw = skillsRaw.join(',');
-
-            if (!email ||!first_name) { skipped++; continue; }
-            if (seenEmails.has(email)) { skipped++; continue; } // Excel me hi same email 2 baar
-            seenEmails.add(email);
-
-            // DB me already hai kya?
-            const dup = await pool.request().input('email', sql.VarChar, email)
-                        .query('SELECT id FROM candidates WHERE email = @email');
-            if (dup.recordset.length > 0) { skipped++; continue; }
-
-            const result = await pool.request()
-              .input('first_name', sql.VarChar, first_name)
-              .input('last_name', sql.VarChar, last_name)
-              .input('email', sql.VarChar, email)
-              .input('phone', sql.VarChar, phone)
-              .input('current_location', sql.VarChar, city)
-              .input('applied_role', sql.VarChar, applied_role)
-              .input('current_employer', sql.VarChar, current_employer)
-              .input('experience_years', sql.Decimal(4,1), exp)
-              .input('current_ctc', sql.Int, currCTC)
-              .input('expected_ctc', sql.Int, expCTC)
-              .input('notice_period', sql.VarChar, notice)
-              .input('application_source', sql.VarChar, source)
-              .query(`INSERT INTO candidates (first_name, last_name, email, phone, current_location, applied_role, current_employer, experience_years, current_ctc, expected_ctc, notice_period, application_source) OUTPUT INSERTED.id VALUES (@first_name, @last_name, @email, @phone, @current_location, @applied_role, @current_employer, @experience_years, @current_ctc, @expected_ctc, @notice_period, @application_source)`);
-
-            const candidateId = result.recordset[0].id;
-            inserted++;
-
-            const skillsArr = skillsRaw.toString().split(',').map(s => s.trim()).filter(Boolean);
-            for (let name of skillsArr) {
-                let sc = await pool.request().input('skill_name', sql.VarChar, name).query('SELECT id FROM skills WHERE skill_name=@skill_name');
-                let skillId = sc.recordset.length? sc.recordset[0].id : (await pool.request().input('skill_name', sql.VarChar, name).query('INSERT INTO skills (skill_name) OUTPUT INSERTED.id VALUES (@skill_name)')).recordset[0].id;
-                await pool.request().input('candidate_id', sql.Int, candidateId).input('skill_id', sql.Int, skillId).query('INSERT INTO candidate_skills (candidate_id, skill_id) VALUES (@candidate_id, @skill_id)');
-            }
-        }
-
-        console.log(`Inserted: ${inserted}, Skipped: ${skipped}`);
-        res.json({ success: true, message: `${inserted} candidates imported successfully, ${skipped} skipped (duplicate email)` });
-
-    } catch (err) {
-        console.error('BULK ERROR:', err);
-        res.status(500).json({ error: err.message });
-    }
+  } catch (err) {
+    console.error('BULK ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
-// --------------------------------- Delete Multiple Selected Candidate ------------------------------
-// ================= BULK DELETE - SELECTED CANDIDATES =================
+// 3.4 BULK DELETE - SELECTED CANDIDATES 
+// Purpose: When you select multiple candidates and want to delete them, then this api will called.
+// Method: POST
 app.post('/api/candidates/bulk-delete', async (req, res) => {
-  const { ids } = req.body; 
+  const { ids } = req.body;
 
   if (!ids || ids.length === 0) {
     return res.status(400).json({ error: 'No candidates selected' });
@@ -572,7 +619,7 @@ app.post('/api/candidates/bulk-delete', async (req, res) => {
 
   try {
     const pool = await sql.connect(dbConfig);
-    
+
     const idsString = ids.join(','); // "1,5,8"
 
     // 1. Delete from application
@@ -593,13 +640,15 @@ app.post('/api/candidates/bulk-delete', async (req, res) => {
   }
 });
 
-// ================= GET SINGLE CANDIDATE BY ID =================
+// 3.5 GET SINGLE CANDIDATE BY ID
+// Purpose: This api fetched single candidate details
+// Method: GET /api/candidates/:id
 app.get('/api/candidates/:id', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request()
-    .input('id', sql.Int, req.params.id)
-    .query(`
+      .input('id', sql.Int, req.params.id)
+      .query(`
         SELECT c.*,
           (SELECT STRING_AGG(s.skill_name, ', ')
            FROM candidate_skills cs
@@ -609,7 +658,7 @@ app.get('/api/candidates/:id', async (req, res) => {
         FROM candidates c
         WHERE c.id = @id
       `);
-    if(result.recordset.length === 0) return res.status(404).json({ error: 'Not found' });
+    if (result.recordset.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(result.recordset[0]);
   } catch (err) {
     console.error("GET BY ID ERROR:", err);
@@ -617,7 +666,9 @@ app.get('/api/candidates/:id', async (req, res) => {
   }
 });
 
-// ================= UPDATE CANDIDATE =================
+// 3.6 UPDATE CANDIDATE 
+// Purpose: This api called when you need to update candidate details
+// Method: PUT /api/candidates/:id
 app.put('/api/candidates/:id', upload.single('resume'), async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
@@ -625,19 +676,19 @@ app.put('/api/candidates/:id', upload.single('resume'), async (req, res) => {
     const id = req.params.id;
 
     await pool.request()
-     .input('id', sql.Int, id)
-     .input('first_name', sql.VarChar, data.first_name)
-     .input('last_name', sql.VarChar, data.last_name)
-     .input('email', sql.VarChar, data.email)
-     .input('phone', sql.VarChar, data.phone)
-     .input('current_location', sql.VarChar, data.current_location)
-     .input('applied_role', sql.VarChar, data.applied_role)
-     .input('current_employer', sql.VarChar, data.current_employer)
-     .input('experience_years', sql.Decimal(4,1), data.experience_years || null)
-     .input('current_ctc', sql.Int, data.current_ctc || null)
-     .input('expected_ctc', sql.Int, data.expected_ctc || null)
-     .input('notice_period', sql.VarChar, data.notice_period)
-     .query(`UPDATE candidates SET first_name=@first_name, last_name=@last_name, email=@email, phone=@phone, current_location=@current_location, applied_role=@applied_role, current_employer=@current_employer, experience_years=@experience_years, current_ctc=@current_ctc, expected_ctc=@expected_ctc, notice_period=@notice_period WHERE id=@id`);
+      .input('id', sql.Int, id)
+      .input('first_name', sql.VarChar, data.first_name)
+      .input('last_name', sql.VarChar, data.last_name)
+      .input('email', sql.VarChar, data.email)
+      .input('phone', sql.VarChar, data.phone)
+      .input('current_location', sql.VarChar, data.current_location)
+      .input('applied_role', sql.VarChar, data.applied_role)
+      .input('current_employer', sql.VarChar, data.current_employer)
+      .input('experience_years', sql.Decimal(4, 1), data.experience_years || null)
+      .input('current_ctc', sql.Int, data.current_ctc || null)
+      .input('expected_ctc', sql.Int, data.expected_ctc || null)
+      .input('notice_period', sql.VarChar, data.notice_period)
+      .query(`UPDATE candidates SET first_name=@first_name, last_name=@last_name, email=@email, phone=@phone, current_location=@current_location, applied_role=@applied_role, current_employer=@current_employer, experience_years=@experience_years, current_ctc=@current_ctc, expected_ctc=@expected_ctc, notice_period=@notice_period WHERE id=@id`);
 
     res.json({ success: true, message: 'Candidate updated' });
   } catch (err) {
@@ -645,7 +696,9 @@ app.put('/api/candidates/:id', upload.single('resume'), async (req, res) => {
   }
 });
 
-// ================= DELETE SINGLE CANDIDATE =================
+// 3.7 DELETE SINGLE CANDIDATE 
+// Purpose: This api used when you need to delete single candidate
+// Method: DELETE 
 app.delete('/api/candidates/:id', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
@@ -661,56 +714,54 @@ app.delete('/api/candidates/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// **************************************************************************
-// **************************************************************************
-//                       CANDIDATE API CLOSED
-// **************************************************************************
-// **************************************************************************
 
+// =========================================================================================================================================================
+// =========================================================================================================================================================
+//                                                                  4. APPLICATIONS
+// =========================================================================================================================================================
+// =========================================================================================================================================================
 
-// Add Candidates & Jobs in Application - DEBUGGED
-
-app.post('/api/vacancies/:id/add-candidates', async (req,res)=>{
+//  4.1 ADD CANDIDATES IN APPLICATIONS
+// Purpose: You have candidates, now you want to create these candidates into applications then this api will called.
+// Method: POST
+app.post('/api/vacancies/:id/add-candidates', async (req, res) => {
   try {
     const vacancyId = parseInt(req.params.id);
-    const { candidateIds } = req.body; // [101,102,103]
-
-    if(!candidateIds ||!Array.isArray(candidateIds) || candidateIds.length === 0){
+    const { candidateIds } = req.body;
+    if (!candidateIds || !Array.isArray(candidateIds) || candidateIds.length === 0) {
       return res.status(400).json({ error: "candidateIds array required" });
     }
-
-    const pool = await sql.connect();
+    const pool = await getPool();
     let added = 0;
-
-    for(const cid of candidateIds){
+    for (const cid of candidateIds) {
       const result = await pool.request()
-      .input('VacancyId', sql.Int, vacancyId)
-      .input('CandidateId', sql.Int, parseInt(cid))
-      .query(`
+        .input('VacancyId', sql.Int, vacancyId)
+        .input('CandidateId', sql.Int, parseInt(cid))
+        .query(`
          IF NOT EXISTS(SELECT 1 FROM Vacancy_Applications WHERE VacancyId=@VacancyId AND CandidateId=@CandidateId)
          BEGIN
+           DECLARE @NewId INT;
            INSERT INTO Vacancy_Applications(VacancyId, CandidateId, CurrentStage) VALUES(@VacancyId, @CandidateId, 'Screening');
-           INSERT INTO Application_Stage_History(ApplicationId, FromStage, ToStage, Notes) VALUES(SCOPE_IDENTITY(), NULL, 'Screening', 'Bulk added');
+           SET @NewId = SCOPE_IDENTITY();
+           INSERT INTO Application_Stage_History(ApplicationId, FromStage, ToStage, Notes) VALUES(@NewId, NULL, 'Screening', 'Bulk added');
            SELECT 1 as inserted;
          END
-         ELSE
-         BEGIN
-           SELECT 0 as inserted;
-         END
+         ELSE BEGIN SELECT 0 as inserted; END
        `);
-      // result.recordset[0].inserted will be 1 if added
-      if(result.recordset && result.recordset[0]?.inserted === 1) added++;
+      if (result.recordset && result.recordset[0]?.inserted === 1) added++;
     }
-    res.json({message: `${added} applications created for Job ${vacancyId}`, added});
-  } catch(err){
+    res.json({ message: `${added} applications created for Job ${vacancyId}`, added });
+  } catch (err) {
     console.error("ADD-CANDIDATES FAILED:", err);
     res.status(500).json({ error: err.message });
   }
 });
-
+//  4.2 APPLICATIONS SUMMARY
+// Purpose: This API gives you applications summary
+// Method: GET
 app.get('/api/applications/summary', async (req, res) => {
   try {
-    const pool = await sql.connect();
+    const pool = await getPool();
     const result = await pool.request().query(`
       SELECT
         v.VacancyId as id,
@@ -724,7 +775,7 @@ app.get('/api/applications/summary', async (req, res) => {
         ISNULL(SUM(CASE WHEN va.CurrentStage='Hired' THEN 1 ELSE 0 END),0) as hired,
         MAX(va.AppliedAt) as lastAppliedAt
       FROM Vacancies v
-      INNER JOIN Vacancy_Applications va ON va.VacancyId = v.VacancyId
+      LEFT JOIN Vacancy_Applications va ON va.VacancyId = v.VacancyId
       LEFT JOIN Master_Departments d ON d.DepartmentId = v.DepartmentId
       LEFT JOIN Master_Locations l ON l.LocationId = v.LocationId
       GROUP BY v.VacancyId, v.JobTitle, d.DepartmentName, v.LocationText, l.City
@@ -736,16 +787,18 @@ app.get('/api/applications/summary', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+//  4.3 APPLICATIONS IN VACANCY
+// Purpose: You have no of vacancies and you added no of candidates in an individual vacancy. now if you want to get how many candidates available in a particular vacancy then this api will called.
+// Method: GET /api/vacancies/:id/applications
 app.get('/api/vacancies/:id/applications', async (req, res) => {
   try {
-    const pool = await sql.connect();
+    const pool = await getPool();
     const result = await pool.request()
-    .input('VacancyId', sql.Int, req.params.id)
-    .query(`
-        SELECT
-          va.ApplicationId, va.CurrentStage, va.AppliedAt, va.UpdatedAt,
-          c.id as candidateId, c.first_name, c.last_name, c.email, c.applied_role, c.current_location
+      .input('VacancyId', sql.Int, req.params.id)
+      .query(`
+        SELECT va.ApplicationId, va.CurrentStage, va.AppliedAt, va.UpdatedAt,
+               c.id as candidateId, c.first_name, c.last_name, c.email,
+               CONCAT(c.first_name, ' ', c.last_name) as CandidateName
         FROM Vacancy_Applications va
         JOIN candidates c ON c.id = va.CandidateId
         WHERE va.VacancyId = @VacancyId
@@ -753,17 +806,18 @@ app.get('/api/vacancies/:id/applications', async (req, res) => {
       `);
     res.json(result.recordset);
   } catch (err) {
-    console.error("DETAIL QUERY FAILED:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Stage Move API - Candidate ko aage badhana
+// 4.4 MOVE CANDIDATES IN HIRING PIPELINE
+// Purpose: Used to move candidates in hiring pipeline. Updates candidate stage
+// Method: PUT /api/applications/:id/move
 app.put('/api/applications/:id/move', async (req, res) => {
   try {
     const { toStage, notes } = req.body; // toStage = 'Interview', 'Hired' etc
-    const pool = await sql.connect();
-    
+    const pool = await getPool();
+
     const result = await pool.request()
       .input('AppId', sql.Int, req.params.id)
       .input('ToStage', sql.NVarChar, toStage)
@@ -779,30 +833,38 @@ app.put('/api/applications/:id/move', async (req, res) => {
         
         SELECT @from as fromStage, @ToStage as toStage;
       `);
-    
+
     res.json({ message: `Moved from ${result.recordset[0].fromStage} to ${result.recordset[0].toStage}` });
   } catch (err) {
     console.error("MOVE FAILED:", err);
-    // Agar invalid stage naam diya to yahi error aayega
-    if(err.message.includes('CK_VA_Stage')) {
+    // If user give any invlaid stage then this error will occur.
+    if (err.message.includes('CK_VA_Stage')) {
       return res.status(400).json({ error: `Invalid stage. Use: Applied, Screening, Shortlisted, Interview, Assessment, Offer, Hired, Rejected, On Hold` });
     }
     res.status(500).json({ error: err.message });
   }
 });
 
-// History dekhne ke liye
-app.get('/api/applications/:id/history', async (req,res)=>{
-  const pool = await sql.connect();
+// 4.5 APPLICATION HISTORY
+// Purpose: 
+// Method: GET
+app.get('/api/applications/:id/history', async (req, res) => {
+  const pool = await getPool();
   const result = await pool.request()
     .input('AppId', sql.Int, req.params.id)
     .query(`SELECT * FROM Application_Stage_History WHERE ApplicationId=@AppId ORDER BY ChangedAt DESC`);
   res.json(result.recordset);
 });
 
-// **************************************************
-// DASHBOARD API - FINAL
-//***************************************************
+// ====================================================================================================================================================
+// ====================================================================================================================================================
+//                                                                    5. DASHBOARD API
+//=====================================================================================================================================================
+//=====================================================================================================================================================
+
+// 5.1 DASHBOARD API
+// Purpose: This API gives requires stats & information about whats happening in databse.
+// Method: GET
 app.get('/api/dashboard', async (req, res) => {
   try {
     const pool = await getPool();
@@ -820,14 +882,14 @@ app.get('/api/dashboard', async (req, res) => {
         (SELECT COUNT(*) FROM Vacancy_Applications WHERE CurrentStage = 'Screening') as screening
     `);
 
-    // 2. Pipeline - Tumhare 7 stages ke liye
+    // 2. Pipeline - For 7 Stages
     const pipelineResult = await pool.request().query(`
       SELECT CurrentStage as stage, COUNT(*) as count
       FROM Vacancy_Applications
       GROUP BY CurrentStage
     `);
-    // Frontend const STAGES se match karne ke liye map banao
-    const STAGES = ['Applied','Screening','Interview','Offer','Hired','Rejected','On Hold'];
+    // Create a map function to map with the frontend const STAGES
+    const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired', 'Rejected', 'On Hold'];
     const pipelineMap = {};
     pipelineResult.recordset.forEach(r => pipelineMap[r.stage] = r.count);
     const pipeline = STAGES.map(s => ({ stage: s, count: pipelineMap[s] || 0 }));
@@ -884,13 +946,15 @@ app.get('/api/dashboard', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// **************************************************
-// DASHBOARD API CLOSED
-// **************************************************
+// ==========================================================================================================
+// ==========================================================================================================
+//                         6. GLOBAL SEARCH API - Vacancies + Candidates + Applications
+//===========================================================================================================
+//===========================================================================================================
 
-// **************************************************
-// GLOBAL SEARCH API - Vacancies + Candidates + Applications
-//***************************************************
+// 6.1 GLOBAL SEARCH API
+// Purpose: You have a global search this api used to scan whole databse as globally.
+// Method: GET
 app.get('/api/search', async (req, res) => {
   const q = (req.query.q || '').trim();
   if (!q || q.length < 2) return res.json([]);
@@ -901,8 +965,8 @@ app.get('/api/search', async (req, res) => {
 
     // 1. Vacancies search
     const vacResult = await pool.request()
-     .input('q', sql.NVarChar, like)
-     .query(`
+      .input('q', sql.NVarChar, like)
+      .query(`
         SELECT TOP 10
           'vacancy' as type,
           CAST(v.VacancyId as NVARCHAR) as id,
@@ -921,8 +985,8 @@ app.get('/api/search', async (req, res) => {
 
     // 2. Candidates search
     const candResult = await pool.request()
-     .input('q', sql.NVarChar, like)
-     .query(`
+      .input('q', sql.NVarChar, like)
+      .query(`
         SELECT TOP 10
           'candidate' as type,
           CAST(c.id as NVARCHAR) as id,
@@ -942,8 +1006,8 @@ app.get('/api/search', async (req, res) => {
 
     // 3. Applications search (Pipeline)
     const appResult = await pool.request()
-     .input('q', sql.NVarChar, like)
-     .query(`
+      .input('q', sql.NVarChar, like)
+      .query(`
         SELECT TOP 10
           'application' as type,
           CAST(va.ApplicationId as NVARCHAR) as id,
@@ -961,7 +1025,7 @@ app.get('/api/search', async (req, res) => {
         ORDER BY va.AppliedAt DESC
       `);
 
-    const all = [...vacResult.recordset,...candResult.recordset,...appResult.recordset];
+    const all = [...vacResult.recordset, ...candResult.recordset, ...appResult.recordset];
     res.json(all);
 
   } catch (err) {
@@ -970,8 +1034,211 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+// ========================================================================================================
+// ========================================================================================================
+//                                            7. API Interviews - FINAL FIXED 
+// ========================================================================================================
+// ========================================================================================================
+
+// 7.1 DELETE API 
+// Purpose: This API Used to delete your created interviews
+// Method: DELETE
+app.delete('/api/interviews/:id', async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request().input('Id', sql.Int, req.params.id)
+      .query(`DELETE FROM Interviews WHERE InterviewId = @Id`);
+    res.json({ message: "Deleted" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// 7.2 RESCHEDULE API 
+// Purpose: This API Used to reschedule your created interviews
+// Method: PUT /api/interviews/:id - Reschedule
+app.put('/api/interviews/:id', async (req, res) => {
+  const { InterviewDate, InterviewTime, Duration, Venue, Mode, MeetingLink, Interviewer, Notes } = req.body;
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('Id', sql.Int, req.params.id)
+      .input('Date', sql.Date, InterviewDate)
+      .input('Time', sql.Time, InterviewTime)
+      .input('Duration', sql.Int, parseInt(Duration))
+      .input('Venue', sql.NVarChar, Venue)
+      .input('Mode', sql.NVarChar, Mode)
+      .input('Notes', sql.NVarChar, Notes)
+      .input('Link', sql.NVarChar, MeetingLink)
+      .input('Interviewer', sql.NVarChar, Interviewer)
+      .query(`UPDATE Interviews SET InterviewDate=@Date, InterviewTime=@Time, Duration=@Duration, Venue=@Venue, Mode=@Mode, MeetingLink=@Link, Interviewer=@Interviewer, UpdatedAt=GETDATE() WHERE InterviewId=@Id`);
+    res.json({ message: "Rescheduled" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 7.3 GET SCHEDULED INTERVIEWS
+// Purpose: This API Used to fetch scheduled interviews
+// Method: GET
+app.get('/api/interviews', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT
+        i.InterviewId, 
+        i.ApplicationId, 
+        i.VacancyId, 
+        i.InterviewDate, 
+        i.InterviewTime,
+        i.Notes,
+        i.Duration, i.InterviewType, i.Round, i.Mode, 
+        i.Venue, i.Platform, i.MeetingLink, i.Interviewer, i.Status,
+        -- Candidate
+        CONCAT(c.first_name, ' ', c.last_name) as CandidateName,
+        c.email as CandidateEmail,
+        -- Vacancy with normalized location
+        v.JobTitle,
+        COALESCE(v.LocationText, CONCAT(ml.City, ', ', ml.State)) as Location,
+        ml.City as VacancyCity
+      FROM Interviews i
+      JOIN Vacancy_Applications va ON va.ApplicationId = i.ApplicationId
+      JOIN candidates c ON c.id = va.CandidateId
+      JOIN Vacancies v ON v.VacancyId = i.VacancyId
+      LEFT JOIN Master_Locations ml ON v.LocationId = ml.LocationId
+      ORDER BY i.InterviewDate DESC, i.InterviewTime DESC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("GET /api/interviews error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7.4 POST SCHEDULED INTERVIEWS
+// Purpose: This API Used to POST INSERT  scheduled interviews in DATABASE
+// Method: POST
+app.post('/api/interviews', async (req, res) => {
+  let { ApplicationId, VacancyId, date, time, duration = 60, mode, venue, platform, meetingLink, InterviewDate, InterviewTime, interviewType, round, interviewer, notes, building, floorRoom, meetingId, passcode } = req.body;
+
+  const finalDate = InterviewDate || date;
+  const finalTime = InterviewTime || time;
+
+  ApplicationId = parseInt(ApplicationId);
+  VacancyId = parseInt(VacancyId);
+  duration = parseInt(duration);
+
+  if (!ApplicationId || !VacancyId || !finalDate || !finalTime || !mode) {
+    return res.status(400).json({ error: "Required fields missing" });
+  }
+
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
 
 
+    // VALIDATION: Simple exact time check (overlap based query failed at TIME cast) ---
+    const conflictCheck = await new sql.Request(transaction)
+      .input('ApplicationId', sql.Int, ApplicationId)
+      .input('InterviewDate', sql.Date, finalDate)
+      .input('InterviewTime', sql.Time, finalTime)
+      .input('Interviewer', sql.NVarChar, interviewer || null)
+      .query(`
+        SELECT TOP 1 'Candidate already has an interview at this time' as reason
+        FROM Interviews
+        WHERE ApplicationId = @ApplicationId
+        AND InterviewDate = @InterviewDate
+        AND InterviewTime = @InterviewTime
+        AND Status = 'Scheduled'
+
+        UNION
+
+        SELECT TOP 1 'Interviewer is already busy at this time' as reason
+        FROM Interviews
+        WHERE Interviewer = @Interviewer
+        AND @Interviewer IS NOT NULL AND @Interviewer!= ''
+        AND InterviewDate = @InterviewDate
+        AND InterviewTime = @InterviewTime
+        AND Status = 'Scheduled'
+      `);
+
+    if (conflictCheck.recordset.length > 0) {
+      await transaction.rollback();
+      return res.status(409).json({
+        error: "Slot already booked",
+        reason: conflictCheck.recordset[0].reason
+      });
+    }
+
+    // ********  INSERT  **********************
+    const request = new sql.Request(transaction);
+    const interviewResult = await request
+      .input('ApplicationId', sql.Int, ApplicationId)
+      .input('VacancyId', sql.Int, VacancyId)
+      .input('InterviewDate', sql.Date, finalDate)
+      .input('InterviewTime', sql.Time, finalTime)
+      .input('Duration', sql.Int, duration)
+      .input('InterviewType', sql.NVarChar, interviewType || 'Technical')
+      .input('Round', sql.NVarChar, round || 'Round 1')
+      .input('Mode', sql.NVarChar, mode)
+      .input('Venue', sql.NVarChar, venue || (mode === 'Onsite' ? 'Dera Bassi Office' : null))
+      .input('Building', sql.NVarChar, building || null)
+      .input('FloorRoom', sql.NVarChar, floorRoom || null)
+      .input('Platform', sql.NVarChar, platform || null)
+      .input('MeetingLink', sql.NVarChar, meetingLink || null)
+      .input('MeetingId', sql.NVarChar, meetingId || null)
+      .input('Passcode', sql.NVarChar, passcode || null)
+      .input('Interviewer', sql.NVarChar, interviewer || null)
+      .input('Notes', sql.NVarChar, notes || null)
+      .query(`
+        INSERT INTO Interviews (ApplicationId, VacancyId, InterviewDate, InterviewTime, Duration, InterviewType, Round, Mode, Venue, Building, FloorRoom, Platform, MeetingLink, MeetingId, Passcode, Interviewer, Notes, Status)
+        VALUES (@ApplicationId, @VacancyId, @InterviewDate, @InterviewTime, @Duration, @InterviewType, @Round, @Mode, @Venue, @Building, @FloorRoom, @Platform, @MeetingLink, @MeetingId, @Passcode, @Interviewer, @Notes, 'Scheduled');
+        SELECT SCOPE_IDENTITY() as InterviewId;
+      `);
+
+    // Stage history bhi update karo
+    await new sql.Request(transaction)
+      .input('AppId', sql.Int, ApplicationId)
+      .query(`
+        DECLARE @FromStage NVARCHAR(50);
+        SELECT @FromStage = CurrentStage FROM Vacancy_Applications WHERE ApplicationId = @AppId;
+        UPDATE Vacancy_Applications SET CurrentStage = 'Interview', UpdatedAt = GETDATE() WHERE ApplicationId = @AppId;
+        INSERT INTO Application_Stage_History (ApplicationId, FromStage, ToStage, Notes) VALUES (@AppId, @FromStage, 'Interview', 'Interview Scheduled');
+    `);
+
+    await transaction.commit();
+    res.status(201).json({ message: "Interview scheduled", InterviewId: interviewResult.recordset[0].InterviewId });
+
+  } catch (err) {
+    try { await transaction.rollback(); } catch (e) { }
+    console.error("POST /api/interviews error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * =================================================================
+ * API: GET /api/vacancies/:id/interview-applications
+ * METHOD: GET
+ * EXAMPLE: GET /api/vacancies/1004/interview-applications
+ * PURPOSE: For Interviews Page Pipeline
+ * - Returns only candidates who are in 'Interview' stage
+ * - AND whose interview is NOT yet scheduled
+ * - Used to prevent double-booking / duplicate scheduling
+ * =================================================================
+ */
+app.get('/api/vacancies/:id/interview-applications', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().input('VacancyId', sql.Int, req.params.id).query(`
+      SELECT va.ApplicationId, va.CurrentStage, c.id as candidateId, c.first_name, c.last_name, c.email,
+             CONCAT(c.first_name, ' ', c.last_name) as CandidateName
+      FROM Vacancy_Applications va JOIN candidates c ON c.id = va.CandidateId
+      LEFT JOIN Interviews i ON i.ApplicationId = va.ApplicationId AND i.Status='Scheduled'
+      WHERE va.VacancyId=@VacancyId AND va.CurrentStage='Interview' AND i.InterviewId IS NULL
+      ORDER BY va.AppliedAt DESC
+    `);
+    res.json(result.recordset);
+  } catch (e) { res.status(500).json({ error: e.message }) }
+});
+app.use('/api/settings', companyRoutes);
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on http://localhost:${PORT}`);

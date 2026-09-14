@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ConfirmModal from "../../Components/ConfirmModel";
 import {
   User,
   Mail,
@@ -18,7 +19,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
-export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
+export default function CreateCandidate({ candidateId, onSuccess, onCancel }) {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -43,7 +44,8 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
   const [currentSkill, setCurrentSkill] = useState("");
   const [resumeFile, setResumeFile] = useState(null);
   const [candidates, setCandidates] = useState([]);
-
+  const [modal, setModal] = useState({ open: false, title: "" });
+  const closeModal = () => setModal({ open: false, title: "" });
   // input handler
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -53,7 +55,7 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
     }));
   };
 
- // add skills handler
+  // add skills handler
   const handleAddSkill = (e) => {
     e.preventDefault();
     if (currentSkill.trim() && !skills.includes(currentSkill.trim())) {
@@ -75,7 +77,7 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
   };
 
   // handle submit
-    const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
@@ -98,7 +100,7 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
       submitData.append('linkedin_url', formData.linkedinUrl);
       submitData.append('portfolio_url', formData.portfolioUrl);
       submitData.append('recruiter_notes', formData.candidateNotes);
-      
+
       // Important: Skills are need to send in json string
       submitData.append('skills', JSON.stringify(skills));
 
@@ -115,25 +117,26 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
       const result = await response.json();
 
       if (response.ok) {
-        alert('Candidate added successfully! ID: ' + result.id);
-        console.log(result);
-        if (onSuccess) onSuccess();
+        setModal({
+          open: true,
+          title: `Candidate ${candidateId ? 'Updated' : 'Added'} Successfully!\nID: ${result.id || candidateId}`
+        });
       } else {
-        alert('Error: ' + result.error);
+        setModal({ open: true, title: `Error: ${result.error}` });
       }
 
     } catch (err) {
       console.error(err);
-      alert('Server error, check console');
+      setModal({ open: true, title: "Server error, check console\nBackend running on port 5000?" });
     }
   };
 
-// // agar candidateId hai to edit mode
+  // // agar candidateId hai to edit mode
   useEffect(() => {
-    if(candidateId){
+    if (candidateId) {
       fetch(`http://localhost:5000/api/candidates/${candidateId}`)
-      .then(r => r.json())
-      .then(data => {
+        .then(r => r.json())
+        .then(data => {
           setFormData({
             firstName: data.first_name || "",
             lastName: data.last_name || "",
@@ -153,26 +156,26 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
             candidateNotes: data.recruiter_notes || "",
             currentDesignation: "",
           });
-          if(data.skills){
+          if (data.skills) {
             setSkills(data.skills.split(",").filter(Boolean));
           }
         });
     }
   }, [candidateId]);
 
- 
+
 
 
   return (
     <div className="w-full bg-gray-50/50 p-4 sm:p-6 lg:p-10">
-       <button
-      type="button"
-      onClick={onCancel}
-      className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
-    >
-      <ArrowLeft className="h-4 w-4" />
-      Back to Candidates
-    </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Candidates
+      </button>
       <div className="w-full bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
         {/* Header */}
         <div className="border-b border-gray-200 bg-white px-6 py-6 sm:px-10">
@@ -597,6 +600,18 @@ export default function CreateCandidate({  candidateId, onSuccess, onCancel }) {
           </div>
         </form>
       </div>
+      <ConfirmModal
+        open={modal.open}
+        title={modal.title}
+        showCancel={false}
+        okText="Done"
+        onOk={() => {
+          const wasSuccess = modal.title.includes("Successfully");
+          closeModal();
+          if (wasSuccess && onSuccess) onSuccess(); // ye sahi jagah hai
+        }}
+        onCancel={closeModal}
+      />
     </div>
   );
 }

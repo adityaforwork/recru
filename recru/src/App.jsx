@@ -20,7 +20,7 @@ export default function App() {
         <div className="flex flex-1 ">
           <Sidebar />
 
-          <main className="flex-1">
+          <main className="flex-1 ">
             <div className="h-[90vh] overflow-y-scroll">
               <Routes>
                 <Route path="/" element={<Dashboard />} />

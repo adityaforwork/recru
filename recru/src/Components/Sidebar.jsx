@@ -18,7 +18,6 @@ const mainNavItems = [
   { name: "Candidates", icon: Users, path: "/candidates" },
   { name: "Applications", icon: FileText, path: "/applications" },
   { name: "Interviews", icon: Calendar, path: "/interviews" },
-  { name: "Employees", icon: UserCheck, path: "/employees" },
 ];
 
 const bottomNavItems = [
@@ -41,8 +40,8 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    ? "bg-green-50 text-green-700"
+                    : "text-gray-600 hover:bg-green-50 hover:text-gray-900"
                 }`
               }
             >
@@ -50,7 +49,7 @@ export default function Sidebar() {
                 <>
                   <Icon
                     className={`h-4 w-4 ${
-                      isActive ? "text-blue-700" : "text-gray-400"
+                      isActive ? "text-green-700" : "text-gray-400"
                     }`}
                   />
 
@@ -74,8 +73,8 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    ? "bg-green-50 text-green-700"
+                    : "text-gray-600 hover:bg-green-50 hover:text-gray-900"
                 }`
               }
             >
@@ -83,7 +82,7 @@ export default function Sidebar() {
                 <>
                   <Icon
                     className={`h-4 w-4 ${
-                      isActive ? "text-blue-700" : "text-gray-400"
+                      isActive ? "text-green-700" : "text-gray-400"
                     }`}
                   />
 

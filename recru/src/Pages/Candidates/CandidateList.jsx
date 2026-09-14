@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {useNavigate} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Filter,
@@ -16,11 +16,13 @@ import {
   Sparkles,
   Eye,
   Trash2,
-  Pencil
+  Pencil,
+  X
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import BulkUploadModal from "./BulkUploadModal";
 import VacancyPickerModal from "../../Components/VacancyPickerModal";
+import ConfirmModal from "../../Components/ConfirmModel"
 // format ctc
 const formatCTC = (val) => {
   if (val === null || val === undefined || val === '' || isNaN(Number(val))) {
@@ -28,7 +30,7 @@ const formatCTC = (val) => {
   }
   return Number(val).toLocaleString("en-IN");
 };
-export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile  }) {
+export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile }) {
 
   // useState
   const [candidates, setCandidates] = useState([]);
@@ -38,7 +40,8 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isVacancyModalOpen, setIsVacancyModalOpen] = useState(false);
-
+  const [confirm, setConfirm] = useState({ open: false, title: "", showCancel: true, onOk: () => { } });
+  const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
   // useNavigate
   const navigate = useNavigate()
 
@@ -120,7 +123,7 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
   });
 
   const uniqueRoles = ["All", ...new Set(candidates.map((c) => c.appliedRole))];
-    useEffect(() => {
+  useEffect(() => {
     const fetchCandidates = async () => {
       try {
         const res = await fetch('http://localhost:5000/api/candidates');
@@ -135,18 +138,18 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
           currentCity: c.current_location,
           appliedRole: c.applied_role,
           currentCompany: c.current_employer,
-          experienceYears: c.experience_years?? 0,
+          experienceYears: c.experience_years ?? 0,
           currentSalary: c.current_ctc, // NULL ho sakta hai
           expectedSalary: c.expected_ctc, // NULL ho sakta hai
           noticePeriod: c.notice_period,
           source: c.application_source,
-          skills: c.skills? c.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
+          skills: c.skills ? c.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
           // YE 3 FIELD MISSING THE - YEHI FIX HAI
           currentStage: c.currentStage || c.current_stage || null,
           lastJobTitle: c.lastJobTitle || c.last_job_title || null,
           totalApplications: c.totalApplications || 0,
           status: c.currentStage || 'Not Applied',
-          appliedDate: c.created_at? new Date(c.created_at).toLocaleDateString() : '—',
+          appliedDate: c.created_at ? new Date(c.created_at).toLocaleDateString() : '—',
           resumePath: c.resume_path
         }));
         setCandidates(formatted);
@@ -159,24 +162,24 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
     fetchCandidates();
   }, []);
 
-    // Loading dikhao
-    if (loading) {
-      return <div className="p-10 text-center">Loading candidates from DB...</div>
-    }
-    // Multiple Select & Single Select Coding Logic
-    const toggleOne = (id) => {
-      setSelectedIds(prev => 
-        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-      );
-    };
+  // Loading dikhao
+  if (loading) {
+    return <div className="p-10 text-center">Loading candidates from DB...</div>
+  }
+  // Multiple Select & Single Select Coding Logic
+  const toggleOne = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
-    const toggleAll = () => {
-      if (selectedIds.length === filteredCandidates.length) {
-        setSelectedIds([]); // saare hatado
-      } else {
-        setSelectedIds(filteredCandidates.map(c => c.id)); // saare select
-      }
-    };
+  const toggleAll = () => {
+    if (selectedIds.length === filteredCandidates.length) {
+      setSelectedIds([]); // saare hatado
+    } else {
+      setSelectedIds(filteredCandidates.map(c => c.id)); // saare select
+    }
+  };
 
 
 
@@ -184,67 +187,67 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
   //                            Bulk Operation Performing Functions 
   // ******************************************************************************************
   // Handle Bulk Delete - Candidates
- const handleBulkDelete = async () => {
-  if (!window.confirm(`${selectedIds.length} delete kare?`)) return;
-  
-  const res = await fetch('http://localhost:5000/api/candidates/bulk-delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids: selectedIds }) // yahi ids server pe jayega
-  });
-
-  const data = await res.json();
-  if (res.ok) {
-    setCandidates(prev => prev.filter(c => !selectedIds.includes(c.id)));
-    setSelectedIds([]);
-    alert(data.message);
-  }
-};
-
-  // Handle Bulk Add To Job
-  const handleBulkAddToJob = () => {
-     if (selectedIds.length === 0) return;
-    setIsVacancyModalOpen(true); 
-  };
-  
-  // Handle Bulk Candidates in Pipeline
-  const handleBulkPipeline = () => {
-    const status = prompt('Status: Screening / Interview / Offer');
-    if (!status) return;
-    setCandidates(prev => prev.map(c => selectedIds.includes(c.id)? {...c, status } : c));
-    setSelectedIds([]);
-  };
-    const confirmAddToJob = async (vacancyId) => {
-      try {
-        const res = await fetch(`http://localhost:5000/api/vacancies/${vacancyId}/add-candidates`, {
+  const handleBulkDelete = () => {
+    setConfirm({
+      open: true,
+      title: `Total candidates selected - ${selectedIds.length} are you sure you want to delete these selected candidates.\nThis action is irreversible.`,
+      showCancel: true,
+      onOk: async () => {
+        closeConfirm();
+        const res = await fetch('http://localhost:5000/api/candidates/bulk-delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidateIds: selectedIds })
+          body: JSON.stringify({ ids: selectedIds })
         });
         const data = await res.json();
         if (res.ok) {
-          alert(data.message);
-          setIsVacancyModalOpen(false);
+          setCandidates(prev => prev.filter(c => !selectedIds.includes(c.id)));
           setSelectedIds([]);
-        } else {
-          alert("Error: " + data.message);
+          setConfirm({ open: true, title: data.message || "Deleted successfully", showCancel: false, onOk: closeConfirm });
         }
-      } catch (err) {
-        alert("Failed: " + err.message);
       }
-    };
-     const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this candidate?")) return;
+    });
+  };
+
+  // Handle Bulk Add To Job
+  const handleBulkAddToJob = () => {
+    if (selectedIds.length === 0) return;
+    setIsVacancyModalOpen(true);
+  };
+
+  const confirmAddToJob = async (vacancyId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/candidates/${id}`, { method: "DELETE" });
+      const res = await fetch(`http://localhost:5000/api/vacancies/${vacancyId}/add-candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateIds: selectedIds })
+      });
+      const data = await res.json();
       if (res.ok) {
-        setCandidates(prev => prev.filter(c => c.id !== id));
+        setConfirm({ open: true, title: data.message || "Added to job", showCancel: false, onOk: closeConfirm });
+        setIsVacancyModalOpen(false);
+        setSelectedIds([]);
       } else {
-        alert("Delete failed");
+        setConfirm({ open: true, title: "Error: " + data.message, showCancel: false, onOk: closeConfirm });
       }
     } catch (err) {
-      console.error(err);
+      setConfirm({ open: true, title: "Failed: " + err.message, showCancel: false, onOk: closeConfirm });
     }
+  };
+  const handleDelete = (id) => {
+    setConfirm({
+      open: true,
+      title: `Delete this candidate?\nThis action is irreversible.`,
+      showCancel: true,
+      onOk: async () => {
+        closeConfirm();
+        try {
+          const res = await fetch(`http://localhost:5000/api/candidates/${id}`, { method: "DELETE" });
+          if (res.ok) setCandidates(prev => prev.filter(c => c.id !== id));
+          else setConfirm({ open: true, title: "Delete failed. \n Unable to delete due to some error.", showCancel: false, onOk: closeConfirm });
+        } catch (e) { console.error(e); }
+      }
+    });
   };
 
 
@@ -253,7 +256,7 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
       {/* Add this before closing </div> */}
       <VacancyPickerModal
         isOpen={isVacancyModalOpen}
-        onClose={()=>setIsVacancyModalOpen(false)}
+        onClose={() => setIsVacancyModalOpen(false)}
         selectedCount={selectedIds.length}
         onConfirm={confirmAddToJob}
       />
@@ -344,24 +347,55 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
       <div className="bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden flex flex-col h-[60vh]">
 
         {/* 1. Bulk Bar ko scroll ke BAHAR rakho aur sticky banao */}
-          {selectedIds.length > 0 && (
-          <div className="bg-blue-600 text-white px-6 py-3 flex items-center justify-between shrink-0">
-            <span className="text-sm font-bold">{selectedIds.length} Selected</span>
-            <div className="flex gap-2">
-              <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-red-500 rounded-lg text-xs font-bold hover:bg-red-600">Delete</button>
-              <button onClick={handleBulkAddToJob} className="px-3 py-1.5 bg-white text-blue-600 rounded-lg text-xs font-bold">Add to Job</button>
-              <button onClick={handleBulkPipeline} className="px-3 py-1.5 bg-white text-blue-600 rounded-lg text-xs font-bold">Pipeline</button>
-              <button onClick={() => setSelectedIds([])} className="px-2 py-1.5 bg-blue-700 rounded text-xs">X</button>
+        {selectedIds.length > 0 && (
+          <div className="bg-slate-900 border border-slate-800 text-white px-6 py-4 flex items-center justify-between rounded-tl-2xl rounded-tr-2xl shadow-2xl backdrop-blur-md shrink-0 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4">
+            {/* Left Section: Selected Counter */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black ring-1 ring-emerald-500/30">
+                {selectedIds.length}
+              </div>
+              <span className="text-sm font-semibold tracking-wide text-slate-200">
+                Items Selected
+              </span>
+            </div>
+
+            {/* Right Section: Action Buttons */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handleBulkAddToJob}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-blue-900/30 transition-all duration-200 flex items-center gap-1.5"
+              >
+                <span>Add to Job</span>
+              </button>
+
+              <button
+                onClick={handleBulkDelete}
+                className="p-2 bg-slate-800 hover:bg-red-950 border border-slate-700 hover:border-red-900 text-slate-400 hover:text-red-400 rounded-lg transition-all duration-200"
+                title="Delete Selected"
+              >
+                <Trash2 size={16} />
+              </button>
+
+              <div className="h-4 w-[1px] bg-slate-800 mx-1" /> {/* Subtle Divider */}
+
+              <button
+                onClick={() => setSelectedIds([])}
+                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-all duration-200 text-xs flex items-center justify-center"
+                title="Clear Selection"
+              >
+                <X size={16} /> {/* Replaced "X" text with Lucide Icon */}
+              </button>
             </div>
           </div>
         )}
+
 
         {/* 2. Sirf table wale div ko scroll do */}
         <div className="overflow-y-auto flex-1">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase text- tracking-wider top-0 z-10 sticky">
               <tr>
-                <th className="py-3.5 px-4 w-10"><input type="checkbox" checked={filteredCandidates.length > 0 && selectedIds.length === filteredCandidates.length} onChange={toggleAll} className="cursor-pointer h-4 w-4 rounded border-gray-300 text-blue-600"/></th>
+                <th className="py-3.5 px-4 w-10"><input type="checkbox" checked={filteredCandidates.length > 0 && selectedIds.length === filteredCandidates.length} onChange={toggleAll} className="rounded border-zinc-300 text-emerald-600 accent-emerald-600 checked:bg-emerald-600 checked:border-emerald-600 focus:ring-emerald-600 h-4 w-4 transition-all cursor-pointer" /></th>
                 <th className="py-3.5 px-6">Candidate</th>
                 <th className="py-3.5 px-6">Applied Role</th>
                 <th className="py-3.5 px-6">Experience & Employer</th>
@@ -372,18 +406,34 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredCandidates.length === 0? (
+              {filteredCandidates.length === 0 ? (
                 <tr><td colSpan="8" className="text-center py-10 text-gray-400">No candidates found.</td></tr>
               ) : (
                 filteredCandidates.map((c) => (
-                  <tr key={c.id} className={`${selectedIds.includes(c.id)? 'bg-blue-50' : 'hover:bg-gray-50/60'} transition-colors`}>
-                    <td className="py-4 px-4"><input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggleOne(c.id)} className="cursor-pointer h-4 w-4 rounded border-gray-300 text-blue-600"/></td>
+                  <tr key={c.id} className={`${selectedIds.includes(c.id) ? 'bg-blue-50' : 'hover:bg-gray-50/60'} transition-colors`}>
+                    <td className="py-4 px-4"><input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggleOne(c.id)} className="rounded border-zinc-300 text-emerald-600 accent-emerald-600 checked:bg-emerald-600 checked:border-emerald-600 focus:ring-emerald-600 h-4 w-4 transition-all cursor-pointer" /></td>
                     <td className="py-4 px-6">
                       <div className="font-bold text-gray-900">{c.firstName} {c.lastName}</div>
                       <div className="flex flex-col gap-0.5 text-xs text-gray-500 mt-1">
-                        <span className="flex items-center gap-1.5"><Mail className="h-3 w-3 text-gray-400" /> {c.email}</span>
-                        <span className="flex items-center gap-1.5"><Phone className="h-3 w-3 text-gray-400" /> {c.phone}</span>
-                        <span className="flex items-center gap-1.5 text-gray-400 text-"><MapPin className="h-3 w-3" /> {c.currentCity}</span>
+                        <a
+                          href={`mailto:${c.email?.trim()}`}
+                          className="flex items-center gap-1.5 hover:text-gray-900 transition-colors group"
+                        >
+                          <Mail className="h-3 w-3 text-gray-400 group-hover:text-gray-900" />
+                          <span className="group-hover:underline underline-offset-2">{c.email}</span>
+                        </a>
+
+                        <a
+                          href={`tel:${c.phone}`}
+                          className="flex items-center gap-1.5 hover:text-gray-900 transition-colors group"
+                        >
+                          <Phone className="h-3 w-3 text-gray-400 group-hover:text-gray-900" />
+                          <span className="group-hover:underline underline-offset-2">{c.phone}</span>
+                        </a>
+
+                        <span className="flex items-center gap-1.5 text-gray-400">
+                          <MapPin className="h-3 w-3" /> {c.currentCity}
+                        </span>
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -404,30 +454,30 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
                       <div className="text- text-gray-400">Current: ₹{formatCTC(c.currentSalary)}</div>
                     </td>
                     <td className="py-4 px-6"><span className="text-xs font-medium text-gray-700 bg-gray-100 px-2.5 py-1 rounded-md">{c.noticePeriod}</span></td>
-                        <td className="py-4 px-6">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border
-                          ${c.currentStage === 'Hired'? 'bg-green-50 text-green-700 border-green-200'
-                          : c.currentStage === 'Offer'? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : c.currentStage === 'Interview'? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : c.currentStage === 'Rejected'? 'bg-red-50 text-red-700 border-red-200'
-                          : c.currentStage === 'On Hold'? 'bg-gray-100 text-gray-600 border-gray-200'
-                          : c.currentStage === 'Applied'? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{c.currentStage || 'Not Applied'}
-                        </span>{c.lastJobTitle && <div className="text-[11px] text-gray-400 mt-1 truncate max-w-[120px]">{c.lastJobTitle}</div>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => onViewProfile(c.id)} className="p-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100" title="View Profile">
-                            <Eye size={16} />
-                          </button>
-                          <button onClick={() => onEdit(c.id)} className="p-1.5 bg-green-50 text-green-600 rounded-md hover:bg-green-100" title="Edit">
-                            <Pencil size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(c.id)} className="p-1.5 bg-red-50 text-red-600 rounded-md hover:bg-red-100" title="Delete">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
+                    <td className="py-2 px-2">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-medium border
+                          ${c.currentStage === 'Hired' ? 'bg-green-50 text-green-700 border-green-200'
+                          : c.currentStage === 'Offer' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : c.currentStage === 'Interview' ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : c.currentStage === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200'
+                                : c.currentStage === 'On Hold' ? 'bg-gray-100 text-gray-600 border-gray-200'
+                                  : c.currentStage === 'Applied' ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{c.currentStage || 'Not Applied'}
+                      </span>{c.lastJobTitle && <div className="text-[11px] text-gray-400 mt-1 truncate max-w-[120px]">{c.lastJobTitle}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => onViewProfile(c.id)} className="p-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100" title="View Profile">
+                          <Eye size={16} />
+                        </button>
+                        <button onClick={() => onEdit(c.id)} className="p-1.5 bg-green-50 text-green-600 rounded-md hover:bg-green-100" title="Edit">
+                          <Pencil size={16} />
+                        </button>
+                        <button onClick={() => handleDelete(c.id)} className="p-1.5 bg-red-50 text-red-600 rounded-md hover:bg-red-100" title="Delete">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -442,6 +492,14 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
         onClose={() => setIsBulkModalOpen(false)}
         onUploadSuccess={handleBulkUploadSuccess}
       />
+      <ConfirmModal
+        open={confirm.open}
+        title={confirm.title}
+        showCancel={confirm.showCancel}
+        onOk={confirm.onOk}
+        onCancel={closeConfirm}
+      />
     </div>
+
   );
 }

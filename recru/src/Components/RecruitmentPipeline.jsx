@@ -20,7 +20,7 @@ export default function RecruitmentPipeline({ candidates = [], activeStage, onSt
                 onClick={() => onStageChange(stage)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium border transition-all flex items-center gap-2
                   ${isActive 
-                    ? 'bg-blue-600 text-white border-blue-600 shadow' 
+                    ? 'bg-green-950 text-white border-green-900 shadow' 
                     : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                   }`}
               >

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-// import { useNavigate } from "react-router-dom"; // HATA DIYA - Tab system me iski zarurat nahi, isse error aa raha tha
 import {
   Briefcase, MapPin, Building2, IndianRupee, ChevronDown, ChevronUp, Search,
   SlidersHorizontal, GraduationCap, Sparkles, CheckCircle, PlusCircle, Clock,
@@ -7,22 +6,37 @@ import {
   Edit,
   Printer,
 } from "lucide-react";
-
+import ConfirmModal from "../../Components/ConfirmModel";
 const API_BASE = "http://localhost:5000/api";
-
 export default function VacancyList({ onCreateNew, onEdit }) {
-  // const navigate = useNavigate(); // HATA DIYA
   const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDepartment, setFilterDepartment] = useState("All");
   const [expandedCardId, setExpandedCardId] = useState(null);
   const [detailsCache, setDetailsCache] = useState({});
-
+  const [confirm, setConfirm] = useState({
+    open: false,
+    title: "",
+    showCancel: true,
+    onOk: () => { },
+    onCancel: () => { }
+  });
+  const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
   const handleEdit = (id) => {
     if (onEdit) onEdit(id);
   };
-
+  // Helper for alerts
+  const showAlert = (msg) => {
+    setConfirm({
+      open: true,
+      title: msg,
+      showCancel: false,
+      okText: "Got it",
+      onOk: closeConfirm,
+      onCancel: closeConfirm
+    });
+  };
   const fetchAll = async () => {
     try {
       setLoading(true);
@@ -30,7 +44,11 @@ export default function VacancyList({ onCreateNew, onEdit }) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       console.log("Fetched vacancies:", data);
-      setVacancies(data);
+
+      // API sometimes returns { vacancies: [...] } or { data: [...] }
+      const list = Array.isArray(data) ? data : data.vacancies || data.data || [];
+      setVacancies(list);
+
     } catch (err) {
       console.error(err);
       alert("Failed to fetch. Check console. Backend running?");
@@ -48,18 +66,33 @@ export default function VacancyList({ onCreateNew, onEdit }) {
       try {
         const res = await fetch(`${API_BASE}/vacancies/${id}`);
         const full = await res.json();
-        setDetailsCache((prev) => ({...prev, [id]: full }));
+        setDetailsCache((prev) => ({ ...prev, [id]: full }));
       } catch (err) { console.error(err); }
     }
   };
 
   // Delete Vacancy 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete vacancy ID " + id + "?")) return;
-    await fetch(`${API_BASE}/vacancies/${id}`, { method: "DELETE" });
-    setVacancies((prev) => prev.filter((v) => v.id!== id));
+  const handleDelete = (id) => {
+    setConfirm({
+      open: true,
+      title: `Delete vacancy ID ${id}?\nThis action cannot be undone.`,
+      showCancel: true,
+      okText: "Delete",
+      cancelText: "Cancel",
+      onOk: async () => {
+        closeConfirm();
+        try {
+          const res = await fetch(`${API_BASE}/vacancies/${id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("Delete failed");
+          setVacancies((prev) => prev.filter((v) => v.id !== id));
+          setDetailsCache(prev => { const n = { ...prev }; delete n[id]; return n; });
+        } catch (e) {
+          showAlert("Delete failed: " + e.message);
+        }
+      },
+      onCancel: closeConfirm
+    });
   };
-
   // Filter Vacancy
   const filteredVacancies = vacancies.filter((job) => {
     const matchesSearch = job.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase()) || job.location?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -67,7 +100,7 @@ export default function VacancyList({ onCreateNew, onEdit }) {
     return matchesSearch && matchesDept;
   });
 
-  const departments = ["All",...new Set(vacancies.map((v) => v.department))];
+  const departments = ["All", ...new Set(vacancies.map((v) => v.department))];
 
   if (loading) {
     return (
@@ -79,54 +112,54 @@ export default function VacancyList({ onCreateNew, onEdit }) {
   }
 
   // Handle Print 
-const handlePrint = async (id) => {
-  const printWindow = window.open('', '_blank', 'width=900,height=800');
-  if (!printWindow) return alert("Popup blocked");
+  const handlePrint = async (id) => {
+    const printWindow = window.open('', '_blank', 'width=900,height=800');
+    if (!printWindow) return alert("Popup blocked");
 
-  try {
-    const res = await fetch(`${API_BASE}/vacancies/${id}`);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const vacancy = await res.json();
+    try {
+      const res = await fetch(`${API_BASE}/vacancies/${id}`);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const vacancy = await res.json();
 
-    const parseList = (field) => {
-      if (!field) return [];
-      if (Array.isArray(field)) return field;
-      if (typeof field === 'string') {
-        try { const p = JSON.parse(field); return Array.isArray(p)? p : [p]; }
-        catch { return field.split(/[,\n]/).map(s => s.trim()).filter(Boolean); }
-      }
-      return [];
-    };
+      const parseList = (field) => {
+        if (!field) return [];
+        if (Array.isArray(field)) return field;
+        if (typeof field === 'string') {
+          try { const p = JSON.parse(field); return Array.isArray(p) ? p : [p]; }
+          catch { return field.split(/[,\n]/).map(s => s.trim()).filter(Boolean); }
+        }
+        return [];
+      };
 
-    const responsibilities = parseList(vacancy.responsibilities);
-    const skills = parseList(vacancy.skills);
-    const qualifications = parseList(vacancy.qualifications);
+      const responsibilities = parseList(vacancy.responsibilities);
+      const skills = parseList(vacancy.skills);
+      const qualifications = parseList(vacancy.qualifications);
 
-    const postedDate = vacancy.postedDate || vacancy.CreatedAt
-    ? new Date(vacancy.postedDate || vacancy.CreatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-      : new Date().toLocaleDateString('en-IN');
+      const postedDate = vacancy.postedDate || vacancy.CreatedAt
+        ? new Date(vacancy.postedDate || vacancy.CreatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN');
 
-    const printedAt = new Date().toLocaleString('en-IN', {
-      day: 'numeric', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: true
-    });
+      const printedAt = new Date().toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      });
 
-    const salaryText = vacancy.isSalaryPublic
-    ? '₹' + Number(vacancy.minSalary).toLocaleString('en-IN') + ' - ₹' + Number(vacancy.maxSalary).toLocaleString('en-IN') + ' LPA'
-      : 'Confidential (Internal: ₹' + Number(vacancy.minSalary).toLocaleString('en-IN') + ' - ₹' + Number(vacancy.maxSalary).toLocaleString('en-IN') + ')';
+      const salaryText = vacancy.isSalaryPublic
+        ? '₹' + Number(vacancy.minSalary).toLocaleString('en-IN') + ' - ₹' + Number(vacancy.maxSalary).toLocaleString('en-IN') + ' LPA'
+        : 'Confidential (Internal: ₹' + Number(vacancy.minSalary).toLocaleString('en-IN') + ' - ₹' + Number(vacancy.maxSalary).toLocaleString('en-IN') + ')';
 
-    // === CHANGE COMPANY DETAILS HERE ===
-    const company = {
-      name: "Enigma Technologies Pvt. Ltd.",
-      tagline: "Innovating Data & Engineering Solutions",
-      address: "Industrial Area, Dera Bassi, Punjab - 140507",
-      email: "hr@enigmatech.com | careers@enigmatech.com",
-      phone: "+91 98765-43210",
-      website: "www.enigmatech.com",
-      logo: "ET" // Replace with <img src='...' /> if you have logo URL
-    };
+      // === CHANGE COMPANY DETAILS HERE ===
+      const company = {
+        name: "Enigma Technologies Pvt. Ltd.",
+        tagline: "Innovating Data & Engineering Solutions",
+        address: "Industrial Area, Dera Bassi, Punjab - 140507",
+        email: "hr@enigmatech.com | careers@enigmatech.com",
+        phone: "+91 98765-43210",
+        website: "www.enigmatech.com",
+        logo: "ET" // Replace with <img src='...' /> if you have logo URL
+      };
 
-    printWindow.document.write(`
+      printWindow.document.write(`
       <html>
       <head>
         <title>JD - ${vacancy.id} - ${vacancy.jobTitle}</title>
@@ -208,18 +241,18 @@ const handlePrint = async (id) => {
 
           <h3>2. Key Responsibilities & Duties</h3>
           <ul class="list">
-            ${responsibilities.length? responsibilities.map((r,i)=>'<li><div class="num">'+String(i+1).padStart(2,'0')+'</div><div>'+String(r).trim()+'</div></li>').join('') : '<li>No responsibilities defined</li>'}
+            ${responsibilities.length ? responsibilities.map((r, i) => '<li><div class="num">' + String(i + 1).padStart(2, '0') + '</div><div>' + String(r).trim() + '</div></li>').join('') : '<li>No responsibilities defined</li>'}
           </ul>
 
           <h3>3. Required Technical Skills</h3>
-          <div class="tags">${skills.length? skills.map(s=>'<span class="tag">'+String(s).trim()+'</span>').join('') : 'No skills defined'}</div>
+          <div class="tags">${skills.length ? skills.map(s => '<span class="tag">' + String(s).trim() + '</span>').join('') : 'No skills defined'}</div>
 
           <h3>4. Qualifications & Education</h3>
-          <ul class="list">${qualifications.map(q=>'<li><div class="num">✓</div><div>'+String(q).trim()+'</div></li>').join('')}</ul>
+          <ul class="list">${qualifications.map(q => '<li><div class="num">✓</div><div>' + String(q).trim() + '</div></li>').join('')}</ul>
 
           <h3>5. Additional Information</h3>
           <div style="font-size:12px;line-height:1.6;color:#475569;background:#fffbeb;border:1px solid #fde68a;padding:12px;border-radius:8px">
-            This job description is confidential and intended for internal recruitment purposes. Salary is ${vacancy.isSalaryPublic? 'public' : 'confidential and not to be disclosed outside HR'}.
+            This job description is confidential and intended for internal recruitment purposes. Salary is ${vacancy.isSalaryPublic ? 'public' : 'confidential and not to be disclosed outside HR'}.
             Candidate must be willing to work ${vacancy.workspace} from ${vacancy.location}.
           </div>
 
@@ -238,13 +271,13 @@ const handlePrint = async (id) => {
       </body>
       </html>
     `);
-    printWindow.document.close();
-  } catch (err) {
-    console.error(err);
-    printWindow.close();
-    alert("Failed to fetch vacancy detail");
-  }
-};
+      printWindow.document.close();
+    } catch (err) {
+      console.error(err);
+      printWindow.close();
+      alert("Failed to fetch vacancy detail");
+    }
+  };
   return (
     <div className="w-full bg-gray-50/50 p-4 sm:p-6 lg:p-10 space-y-6">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
@@ -256,7 +289,7 @@ const handlePrint = async (id) => {
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700">
             <SlidersHorizontal className="h-4 w-4 text-gray-400" />
             <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className="bg-transparent border-none text-xs font-medium text-gray-700 focus:outline-none cursor-pointer">
-              {departments.map((dept) => (<option key={dept} value={dept}>{dept === "All"? "All Departments" : dept}</option>))}
+              {departments.map((dept) => (<option key={dept} value={dept}>{dept === "All" ? "All Departments" : dept}</option>))}
             </select>
           </div>
           <button onClick={fetchAll} className="px-3 py-2 rounded-lg border text-xs">Refresh</button>
@@ -265,25 +298,25 @@ const handlePrint = async (id) => {
       </div>
 
       <div className="text-xs text-gray-500">
-        Total: {vacancies.length} | 
-        Active: {vacancies.filter(v => v.status === 'Active').length} | 
-        Published: {vacancies.filter(v => v.status === 'Published').length} | 
-        Filled: {vacancies.filter(v => v.status === 'Filled').length} | 
+        Total: {vacancies.length} |
+        Active: {vacancies.filter(v => v.status === 'Active').length} |
+        Published: {vacancies.filter(v => v.status === 'Published').length} |
+        Filled: {vacancies.filter(v => v.status === 'Filled').length} |
         Closed: {vacancies.filter(v => v.status === 'Closed').length}
       </div>
 
       <div className="space-y-4">
-        {filteredVacancies.length === 0? (
+        {filteredVacancies.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
             <Briefcase className="h-10 w-10 text-gray-300 mx-auto mb-3" />
             <h3 className="text-base font-semibold text-gray-900">No vacancies found</h3>
-            <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">{vacancies.length === 0? "Database is empty. Create your first vacancy from the form." : "No match for your search."}</p>
+            <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">{vacancies.length === 0 ? "Database is empty. Create your first vacancy from the form." : "No match for your search."}</p>
           </div>
         ) : (
           filteredVacancies.map((vacancy) => {
             const isExpanded = expandedCardId === vacancy.id;
             const full = detailsCache[vacancy.id] || vacancy;
-            const postedDate = vacancy.postedDate? new Date(vacancy.postedDate).toLocaleDateString() : "";
+            const postedDate = vacancy.postedDate ? new Date(vacancy.postedDate).toLocaleDateString() : "";
             return (
               <div key={vacancy.id} className="bg-white border border-gray-200 rounded-xl shadow-xs hover:border-gray-300 overflow-hidden">
                 <div className="p-5 sm:p-6">
@@ -291,7 +324,7 @@ const handlePrint = async (id) => {
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2.5">
                         <h2 className="text-lg font-bold text-gray-900 tracking-tight">{vacancy.jobTitle}</h2>
-                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border${vacancy.status === 'Closed' ? 'bg-red-50 text-red-700 border-red-200' : ''}${['Active','Published'].includes(vacancy.status) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ''}${vacancy.status === 'Filled' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}${vacancy.status === 'Draft' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}`}>{vacancy.status} • {vacancy.id}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border${vacancy.status === 'Closed' ? 'bg-red-50 text-red-700 border-red-200' : ''}${['Active', 'Published'].includes(vacancy.status) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ''}${vacancy.status === 'Filled' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}${vacancy.status === 'Draft' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}`}>{vacancy.status} • {vacancy.id}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-xs text-gray-600">
                         <span className="flex items-center gap-1 font-medium text-gray-700"><Building2 className="h-3.5 w-3.5 text-gray-400" />{vacancy.department}</span>
@@ -304,13 +337,13 @@ const handlePrint = async (id) => {
                     <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-100">
                       <div className="text-left lg:text-right">
                         <div className="flex items-center lg:justify-end gap-1 text-base font-bold text-gray-900"><IndianRupee className="h-4 w-4 text-emerald-600" /><span>{vacancy.minSalary?.toLocaleString("en-IN")} - {vacancy.maxSalary?.toLocaleString("en-IN")}</span></div>
-                        <div className="flex items-center gap-1 text- text-gray-400">{vacancy.isSalaryPublic? <><Eye className="h-3 w-3" /> Public</> : <><EyeOff className="h-3 w-3 text-amber-500" /> Internal</>}</div>
+                        <div className="flex items-center gap-1 text- text-gray-400">{vacancy.isSalaryPublic ? <><Eye className="h-3 w-3" /> Public</> : <><EyeOff className="h-3 w-3 text-amber-500" /> Internal</>}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => handlePrint(vacancy.id)} className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg cursor-pointer"><Printer className="h-4 w-4"></Printer></button>
-                        <button onClick={() => handleEdit(vacancy.id)} className="p-1.5 text-gray-600 hover:text-green-900 hover:bg-green-50 rounded-lg cursor-pointer"><Edit className="h-4 w-4"/></button>
+                        <button onClick={() => handleEdit(vacancy.id)} className="p-1.5 text-gray-600 hover:text-green-900 hover:bg-green-50 rounded-lg cursor-pointer"><Edit className="h-4 w-4" /></button>
                         <button onClick={() => handleDelete(vacancy.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"><Trash2 className="h-4 w-4" /></button>
-                        <button onClick={() => toggleExpand(vacancy.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer">{isExpanded? <>Less Details <ChevronUp className="h-4 w-4" /></> : <>View Details <ChevronDown className="h-4 w-4" /></>}</button>
+                        <button onClick={() => toggleExpand(vacancy.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer">{isExpanded ? <>Less Details <ChevronUp className="h-4 w-4" /></> : <>View Details <ChevronDown className="h-4 w-4" /></>}</button>
                       </div>
                     </div>
                   </div>
@@ -318,7 +351,7 @@ const handlePrint = async (id) => {
                 </div>
                 {isExpanded && (
                   <div className="border-t border-gray-100 bg-gray-50/60 p-5 sm:p-6 space-y-6">
-                    {!detailsCache[vacancy.id]? (<div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading full details from DB...</div>) : (
+                    {!detailsCache[vacancy.id] ? (<div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading full details from DB...</div>) : (
                       <>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-4 border-b border-gray-200/60">
                           <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Experience Level</span><span className="text-sm font-medium text-gray-900 mt-1 block">{full.experienceLevel}</span></div>
@@ -338,6 +371,15 @@ const handlePrint = async (id) => {
           })
         )}
       </div>
+      <ConfirmModal
+        open={confirm.open}
+        title={confirm.title}
+        showCancel={confirm.showCancel}
+        okText={confirm.okText}
+        cancelText={confirm.cancelText}
+        onOk={confirm.onOk}
+        onCancel={confirm.onCancel}
+      />
     </div>
   );
 }

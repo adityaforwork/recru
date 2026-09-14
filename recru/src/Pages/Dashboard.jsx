@@ -3,12 +3,19 @@ import { ArrowRight, Loader2, Briefcase, Users, UserCheck, CalendarCheck, Trendi
 
 const API_BASE = "http://localhost:5000/api";
 const STAGES = ['Applied','Screening','Interview','Offer','Hired','Rejected','On Hold'];
-
+// function greetings - 
+function greetings(){
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 17) return "Good Afternoon";
+  if (hour < 21) return "Good Evening";
+  return "Good Night";
+}
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeStage, setActiveStage] = useState('Screening');
-
+  const getGreetings = greetings()
   useEffect(() => {
     async function fetchDashboard() {
       try {
@@ -45,16 +52,16 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text- font-bold tracking-tight text-gray-900">Good Morning, Aditya 👋</h1>
+          <h1 className="text- font-bold tracking-tight text-gray-900">{getGreetings}, Aditya 👋</h1>
           <p className="text- text-gray-500 mt-1">Here's what's happening with your hiring pipeline today.</p>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-white border px-3 py-1.5 rounded-full"><Clock className="w-3.5 h-3.5"/> {new Date().toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'short'})}</div>
+        <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-white border border-gray-200 px-3 py-1.5 rounded-full"><Clock className="w-3.5 h-3.5"/> {new Date().toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'short'})}</div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div key={s.label} className="bg-white border border-gray-200 rounded- p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group">
+          <div key={s.label} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group">
             <div className="flex justify-between items-start">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.light}`}><s.icon className="w-5 h-5"/></div>
               <TrendingUp className="w-4 h-4 text-gray-300 group-hover:text-green-500 transition-colors"/>
@@ -67,26 +74,28 @@ export default function Dashboard() {
       </div>
 
       {/* Pipeline */}
-      <div className="bg-white border border-gray-200 rounded- p-6 shadow-xs">
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text- font-bold text-gray-900">Recruitment Pipeline</h2>
-          <span className="text-xs bg-gray-100 border px-2.5 py-1 rounded-full text-gray-600">{pipeline.reduce((a,b)=>a+b.count,0)} total in pipeline</span>
+          <span className="text-xs bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-full text-gray-600">{pipeline.reduce((a,b)=>a+b.count,0)} total in pipeline</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {pipeline.map((p, idx) => {
             const isActive = activeStage === p.stage;
             const isRejected = p.stage === 'Rejected';
             const isOnHold = p.stage === 'On Hold';
+            const isHired = p.stage === 'Hired';
             return (
               <React.Fragment key={p.stage}>
                 <button onClick={()=>setActiveStage(p.stage)}
-                  className={`relative px-4 py-2 rounded-full text- font-medium border transition-all flex items-center gap-2
-                  ${isActive? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200'
-                  : isRejected? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
+                  className={`cursor-pointer relative px-4 py-2 rounded-full font-medium border transition-all flex items-center gap-2
+                  ${isActive? 'bg-green-900 text-white border-green-950 shadow-lg shadow-green-50'
+                  : isHired? 'bg-green-600 text-white border-green-600 hover:bg-green-50 hover:text-black'
+                  : isRejected? 'bg-red-950 text-white border-red-900 hover:bg-red-50 hover:text-black'
                   : isOnHold? 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
                   : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'}`}>
                   {p.stage}
-                  <span className={`min-w- h-5 px-1.5 flex items-center justify-center rounded-full text- font-bold ${isActive? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-700 border'}`}>{p.count}</span>
+                  <span className={`min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full text- font-bold ${isActive? 'bg-white text-black' : 'bg-gray-100 text-gray-700 border'}`}>{p.count}</span>
                 </button>
                 {idx < 4 && <ArrowRight className="h-3.5 w-3.5 text-gray-300" />}
               </React.Fragment>
@@ -97,7 +106,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Applications */}
-        <div className="lg:col-span-2 bg-white border border-gray-200 rounded- shadow-xs overflow-hidden">
+        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
           <div className="p-5 border-b flex justify-between items-center">
             <h2 className="text- font-bold text-gray-900">Recent Applications • {activeStage}</h2>
             <span className="text-xs text-blue-600 font-medium cursor-pointer">View all</span>
@@ -122,7 +131,7 @@ export default function Dashboard() {
 
         {/* Department + Recent Vacancies */}
         <div className="space-y-6">
-          <div className="bg-white border border-gray-200 rounded- p-5 shadow-xs">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
             <h2 className="text- font-bold flex items-center gap-2"><Building2 className="w-4 h-4"/> Department Wise</h2>
             <div className="mt-4 space-y-3">
               {(data?.departmentWise || []).map(d=>(
@@ -130,11 +139,11 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded- p-5 shadow-xs">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
             <h2 className="text- font-bold">Open Vacancies</h2>
             <div className="mt-4 space-y-3">
               {(data?.recentVacancies || []).map(v=>(
-                <div key={v.id} className="flex justify-between items-center p-2.5 rounded-xl hover:bg-gray-50 border-transparent hover:border-gray-200 transition-colors"><div><p className="text- font-medium text-gray-900">{v.title}</p><p className="text- text-gray-500">{v.department} • {v.applicants} applicants</p></div><span className={`text- px-2 py-1 rounded-full border ${v.status==='Published'?'bg-green-50 text-green-700 border-green-200':'bg-gray-50 text-gray-600'}`}>{v.status}</span></div>
+                <div key={v.id} className="flex justify-between items-center p-2.5 rounded-xl hover:bg-gray-50 border-transparent hover:border-gray-200 transition-colors"><div><p className="text- font-medium text-gray-900">{v.title}</p><p className="text- text-gray-500">{v.department} • {v.applicants} applicants</p></div><span className={`text- px-2 py-1 rounded-full border border-gray-200 ${v.status==='Published'?'bg-green-50 text-green-700 border-green-200':'bg-gray-50 text-gray-600'}`}>{v.status}</span></div>
               ))}
             </div>
           </div>

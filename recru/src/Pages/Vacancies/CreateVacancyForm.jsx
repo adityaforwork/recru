@@ -8,7 +8,7 @@ const API_BASE = "http://localhost:5000/api";
 
 export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
   const vacancyId = vacancyIdProp;
-  const isEditMode =!!vacancyId;
+  const isEditMode = !!vacancyId;
 
   const [formData, setFormData] = useState({
     jobTitle: "", department: "", employmentType: "Full-time", workspace: "Hybrid", location: "", jobSummary: "",
@@ -22,17 +22,48 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
   const [loadingMasters, setLoadingMasters] = useState(true);
   const [loadingVacancy, setLoadingVacancy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false)
   const [createdId, setCreatedId] = useState(null);
+  const [modal, setModal] = useState({
+    open: false,
+    title: "",
+    showCancel: false,
+    okText: "OK",
+    onOk: () => { }
+  });
+  const closeModal = () => setModal(m => ({ ...m, open: false }));
 
+  const showAlertModal = (title) => {
+    setModal({
+      open: true,
+      title: title,
+      showCancel: false,
+      okText: "OK",
+      onOk: closeModal,
+      onCancel: closeModal
+    });
+  };
+
+  const showSuccessModal = (id) => {
+    setModal({
+      open: true,
+      title: `${isEditMode ? 'Updated' : 'Published'} Successfully!\nVacancy ID: ${id}`,
+      showCancel: false,
+      okText: "Go to List",
+      onOk: () => {
+        closeModal();
+        if (onSuccess) onSuccess();
+      },
+      onCancel: closeModal
+    });
+  };
   useEffect(() => {
     async function fetchMasters() {
       try {
         const res = await fetch(`${API_BASE}/masters`);
         const data = await res.json();
         setMasters(data);
-        if (data.departments.length > 0 &&!formData.department &&!isEditMode) {
-          setFormData(prev => ({...prev, department: data.departments[0].DepartmentName }));
+        if (data.departments.length > 0 && !formData.department && !isEditMode) {
+          setFormData(prev => ({ ...prev, department: data.departments[0].DepartmentName }));
         }
       } catch (err) {
         console.error("Failed to load masters:", err);
@@ -54,7 +85,7 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
           jobTitle: data.jobTitle || "", department: data.department || "", employmentType: data.employmentType || "Full-time",
           workspace: data.workspace || "Hybrid", location: data.location || "", jobSummary: data.jobSummary || "",
           experienceLevel: data.experienceLevel || "Mid-level (3-5 years)", minSalary: data.minSalary || "", maxSalary: data.maxSalary || "",
-          currency: "INR", isSalaryPublic: data.isSalaryPublic?? true, status: data.status || "Active",
+          currency: "INR", isSalaryPublic: data.isSalaryPublic ?? true, status: data.status || "Active",
         });
         if (data.responsibilities?.length) setResponsibilities(data.responsibilities);
         if (data.qualifications?.length) setQualifications(data.qualifications);
@@ -67,36 +98,38 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({...prev, [name]: type === "checkbox"? checked : value }));
+    setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
   const handleListChange = (setter, list, index, value) => { const updated = [...list]; updated[index] = value; setter(updated); };
   const addListItem = (setter, list) => setter([...list, ""]);
-  const removeListItem = (setter, list, index) => { if (list.length > 1) setter(list.filter((_, idx) => idx!== index)); };
+  const removeListItem = (setter, list, index) => { if (list.length > 1) setter(list.filter((_, idx) => idx !== index)); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.minSalary && formData.maxSalary && parseFloat(formData.minSalary) > parseFloat(formData.maxSalary)) {
-      alert("Min salary cannot be greater than Max salary"); return;
+      showAlertModal("Min salary cannot be greater than Max salary");
+      return;
     }
     setSubmitting(true);
     const finalPayload = {
-     ...formData,
-      minSalary: formData.minSalary? parseFloat(formData.minSalary) : null,
-      maxSalary: formData.maxSalary? parseFloat(formData.maxSalary) : null,
-      responsibilities: responsibilities.filter((item) => item.trim()!== ""),
-      qualifications: qualifications.filter((item) => item.trim()!== ""),
-      skills: skills.filter((item) => item.trim()!== ""),
+      ...formData,
+      minSalary: formData.minSalary ? parseFloat(formData.minSalary) : null,
+      maxSalary: formData.maxSalary ? parseFloat(formData.maxSalary) : null,
+      responsibilities: responsibilities.filter((item) => item.trim() !== ""),
+      qualifications: qualifications.filter((item) => item.trim() !== ""),
+      skills: skills.filter((item) => item.trim() !== ""),
     };
     try {
-      const url = isEditMode? `${API_BASE}/vacancies/${vacancyId}` : `${API_BASE}/vacancies`;
-      const method = isEditMode? "PUT" : "POST";
+      const url = isEditMode ? `${API_BASE}/vacancies/${vacancyId}` : `${API_BASE}/vacancies`;
+      const method = isEditMode ? "PUT" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(finalPayload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setCreatedId(data.vacancyId || vacancyId);
-      setShowConfirm(true);
+      const newId = data.vacancyId || vacancyId;
+      showSuccessModal(newId)
     } catch (err) {
-      alert("❌ Failed to save: " + err.message);
+      showAlertModal(`Failed to ${isEditMode ? 'update' : 'publish'} vacancy\n${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +138,7 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
   if (loadingMasters || loadingVacancy) {
     return (
       <div className="w-full h-96 flex items-center justify-center bg-gray-50/50">
-        <div className="flex items-center gap-2 text-gray-600"><Loader2 className="h-5 w-5 animate-spin" /> {isEditMode? "Loading vacancy..." : "Loading masters..."}</div>
+        <div className="flex items-center gap-2 text-gray-600"><Loader2 className="h-5 w-5 animate-spin" /> {isEditMode ? "Loading vacancy..." : "Loading masters..."}</div>
       </div>
     );
   }
@@ -114,7 +147,7 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
     <div className="w-full bg-gray-50/50 p-4 sm:p-6 lg:p-10">
       <div className="w-full bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="border-b border-gray-200 bg-white px-6 py-6 sm:px-10">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{isEditMode? `Edit Job Vacancy ${vacancyId}` : "Create New Job Vacancy"}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{isEditMode ? `Edit Job Vacancy ${vacancyId}` : "Create New Job Vacancy"}</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 sm:p-10 space-y-12">
@@ -160,7 +193,7 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
                   </select>
                 </div>
               </div>
-                 <div className="xl:col-span-2">
+              <div className="xl:col-span-2">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-2">Status <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <CheckCircle2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -276,20 +309,20 @@ export default function CreateVacancyForm({ vacancyIdProp, onSuccess }) {
           <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-6 border-t border-gray-200">
             <button type="button" onClick={() => onSuccess && onSuccess()} className="w-full sm:w-auto px-6 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={submitting} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {submitting? <><Loader2 className="h-4 w-4 animate-spin" /> {isEditMode? "Updating..." : "Publishing..."}</> : <><CheckCircle2 className="h-4 w-4" /> {isEditMode? "Update Vacancy" : "Publish Vacancy"}</>}
+              {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> {isEditMode ? "Updating..." : "Publishing..."}</> : <><CheckCircle2 className="h-4 w-4" /> {isEditMode ? "Update Vacancy" : "Publish Vacancy"}</>}
             </button>
           </div>
         </form>
       </div>
       <ConfirmModal
-      open={showConfirm}
-      title={isEditMode ? "✅ Vacancy updated!" : `🎉 Created! ID: ${createdId}`}
-      onOk={() => {
-        setShowConfirm(false);
-        if (onSuccess) onSuccess();
-      }}
-      onCancel={() => setShowConfirm(false)}
-    />
+        open={modal.open}
+        title={modal.title}
+        showCancel={modal.showCancel}
+        okText={modal.okText}
+        cancelText="Cancel"
+        onOk={modal.onOk}
+        onCancel={modal.onCancel || closeModal}
+      />
     </div>
   );
 }

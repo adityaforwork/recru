@@ -12,6 +12,9 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.37.0",
+    "mammoth": "^1.12.2",
+    "pdf-img-convert": "^2.0.0",
+    "pdfjs-dist": "^3.11.174",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.18.3",
