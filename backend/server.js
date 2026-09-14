@@ -44,6 +44,8 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads')); // avatar ke liye
 const settingsRoute = require('./routes/settings')
 app.use('/api/settings', settingsRoute);
+app.use('/api/notifications', require('./routes/notifications'));
+const { createNotification } = require('./utils/notify');
 // ==========================================================================================================
 // ==========================================================================================================
 //                                      1. DATABASE CONFIGURATION
@@ -457,7 +459,17 @@ app.post('/api/candidates', upload.single('resume'), async (req, res) => {
         .input('skill_id', sql.Int, skillId)
         .query('IF NOT EXISTS (SELECT 1 FROM candidate_skills WHERE candidate_id=@candidate_id AND skill_id=@skill_id) INSERT INTO candidate_skills (candidate_id, skill_id) VALUES (@candidate_id, @skill_id)');
     }
-
+    // 3. 🔔 Notification Generate - isse main kaam fail nahi hoga
+    try {
+      await createNotification(
+        "New Candidate Created",
+        `${data.first_name} ${data.last_name} applied for ${data.applied_role}`,
+        "candidate",
+        candidateId
+      );
+    } catch (notifErr) {
+      console.log("Notification fail but candidate saved:", notifErr.message);
+    }
     res.status(201).json({ success: true, id: candidateId, message: 'Candidate added successfully' });
 
   } catch (err) {
@@ -854,6 +866,32 @@ app.get('/api/applications/:id/history', async (req, res) => {
   res.json(result.recordset);
 });
 
+// DELETE single application
+app.delete('/api/vacancies/:vacancyId/applications/:candidateId', async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('VacancyId', sql.Int, req.params.vacancyId)
+      .input('CandidateId', sql.Int, req.params.candidateId)
+      .query('DELETE FROM Vacancy_Applications WHERE VacancyId=@VacancyId AND CandidateId=@CandidateId');
+    
+    res.json({ success: true, message: "Application deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE ALL - pura process reset karne ke liye (testing ke liye)
+app.delete('/api/vacancies/:id/applications', async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request().input('VacancyId', sql.Int, req.params.id)
+      .query('DELETE FROM Vacancy_Applications WHERE VacancyId=@VacancyId');
+    res.json({ success: true, message: "All applications cleared" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ====================================================================================================================================================
 // ====================================================================================================================================================
 //                                                                    5. DASHBOARD API

@@ -43,7 +43,7 @@ router.post('/users', upload.single('avatar'), async (req, res) => {
      .input('password', sql.VarChar, hashedPassword)
      .input('role', sql.VarChar, role)
      .input('avatar', sql.VarChar, avatarPath)
-     .query('INSERT INTO users (name, email, mobile, password, role, avatar, updated_at) OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.mobile, INSERTED.role, INSERTED.avatar VALUES (@name, @email, @mobile, @password, @role, @avatar)');
+     .query('INSERT INTO users (name, email, mobile, password, role, avatar, updated_at) OUTPUT INSERTED.id, INSERTED.name, INSERTED.email, INSERTED.mobile, INSERTED.role, INSERTED.avatar VALUES (@name, @email, @mobile, @password, @role, @avatar, GETDATE())');
 
     res.json(result.recordset[0]);
   } catch (err) {
@@ -88,41 +88,44 @@ router.delete('/users/:id', async (req, res) => {
 
 // ============== LOGIN ==============
 // POST /api/settings/login
+// POST /api/settings/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if(!email ||!password) return res.status(400).json({ error: "Email and password required" });
+
     const pool = await getPool();
-    const result = await pool.request().input('email', sql.VarChar, email).query('SELECT * FROM users WHERE email = @email');
+    const result = await pool.request()
+     .input('email', sql.VarChar, email.trim().toLowerCase())
+     .query('SELECT * FROM users WHERE email=@email');
+
     const user = result.recordset[0];
-
-    if (!user) return res.status(401).json({ message: "User nahi mila" });
-
-    // Old plain password + new hash dono support
-    let isMatch = false;
-    if (user.password.startsWith('$2a$')) {
-      isMatch = await bcrypt.compare(password, user.password);
-    } else {
-      isMatch = password === user.password;
-      // purane plain password ko hash me convert kar do
-      if (isMatch) {
-        const newHash = await bcrypt.hash(password, 10);
-        await pool.request().input('id', sql.Int, user.id).input('password', sql.VarChar, newHash).query('UPDATE users SET password=@password WHERE id=@id');
-      }
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
     }
 
-    if (!isMatch) return res.status(401).json({ message: "Password galat hai" });
+    // YE SABSE ZAROORI HAI - hash compare
+    const isMatch = await bcrypt.compare(password, user.password);
+    console.log("Password match:", isMatch); // debugging ke liye
 
-    const token = jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '1d' });
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid password" });
+    }
+
+    // token banao
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || 'usha_secret', { expiresIn: '1d' });
 
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, mobile: user.mobile, role: user.role, avatar: user.avatar }
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, avatar: user.avatar }
     });
+
   } catch (err) {
+    console.error("LOGIN FAILED:", err);
     res.status(500).json({ error: err.message });
   }
 });
-
 // ============== GET LOGGED IN USER ==============
 // GET /api/settings/me
 router.get('/me', async (req, res) => {

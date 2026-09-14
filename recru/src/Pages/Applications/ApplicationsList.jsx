@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Briefcase, Users, Clock, ChevronRight, Search, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
+import { Briefcase, Users, Clock, ChevronRight, Search, Loader2, ArrowLeft, ArrowRight, Trash, Trash2 } from "lucide-react";
 
 const API_BASE = "http://localhost:5000/api";
 // Pehle ye tha
@@ -125,6 +125,25 @@ export default function ApplicationsList() {
     return <div className="w-full h-[80vh] flex flex-col items-center justify-center gap-2"><Loader2 className="w-6 h-6 animate-spin" /><span className="text-sm text-gray-500">Loading...</span></div>
   }
 
+  // DELETE handler - isko component ke upar wale functions me daalna
+  const handleDeleteApplication = async (app) => {
+    if (!confirm(`Delete ${app.first_name} ${app.last_name}?`)) return;
+    try {
+      await fetch(`http://localhost:5000/api/vacancies/${selectedVacancy.id}/applications/${app.candidateId}`, {
+        method: 'DELETE'
+      });
+      // list se hata do bina reload ke
+      setCandidates(prev => prev.filter(c => c.ApplicationId !== app.ApplicationId));
+    } catch (e) {
+      alert("Delete failed");
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm("Saare applications delete karne hain? Process reset ho jayega")) return;
+    await fetch(`http://localhost:5000/api/vacancies/${selectedVacancy.id}/applications`, { method: 'DELETE' });
+    setCandidates([]);
+  };
   if (selectedVacancy) {
     return (
       <div className="w-full min-h-screen bg-slate-50/50 p-4 sm:p-6 lg:p-10 space-y-6">
@@ -152,9 +171,16 @@ export default function ApplicationsList() {
               <span>{selectedVacancy.location}</span>
             </p>
           </div>
-          <div className="text-right shrink-0 bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-xl">
-            <div className="text-2xl font-black text-slate-800 tracking-tight">{candidates.length}</div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Total Candidates</div>
+          <div className="flex items-center gap-3">
+            {candidates.length > 0 && (
+              <button onClick={handleClearAll} className="text-xs font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl">
+                Clear All
+              </button>
+            )}
+            <div className="text-right shrink-0 bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-xl">
+              <div className="text-2xl font-black text-slate-800 tracking-tight">{candidates.length}</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Total Candidates</div>
+            </div>
           </div>
         </div>
 
@@ -207,19 +233,28 @@ export default function ApplicationsList() {
                         {app.AppliedAt ? new Date(app.AppliedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
                       </td>
                       <td className="p-4 text-right pr-6 vertical-middle">
-                        <select
-                          value={app.CurrentStage}
-                          onChange={(e) => handleMoveStage(app.ApplicationId, e.target.value)}
-                          className="text-xs font-semibold border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 outline-none shadow-sm hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 cursor-pointer transition-all duration-150"
-                        >
-                          <option>Applied</option>
-                          <option>Screening</option>
-                          <option>Interview</option>
-                          <option>Offer</option>
-                          <option>Hired</option>
-                          <option>Rejected</option>
-                          <option>On Hold</option>
-                        </select>
+                        <div className="flex items-center justify-end gap-2">
+                          <select
+                            value={app.CurrentStage}
+                            onChange={(e) => handleMoveStage(app.ApplicationId, e.target.value)}
+                            className="text-xs font-semibold border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 outline-none shadow-sm hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 cursor-pointer transition-all duration-150"
+                          >
+                            <option>Applied</option>
+                            <option>Screening</option>
+                            <option>Interview</option>
+                            <option>Offer</option>
+                            <option>Hired</option>
+                            <option>Rejected</option>
+                            <option>On Hold</option>
+                          </select>
+                          <button
+                            onClick={() => handleDeleteApplication(app)}
+                            className="p-1.5 hover:bg-red-50 rounded-lg group/btn"
+                            title="Delete application"
+                          >
+                            <Trash2 className="w-4 h-4 text-slate-400 group-hover/btn:text-red-600" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -230,7 +265,6 @@ export default function ApplicationsList() {
         </div>
       </div>
     );
-
   }
 
   return (
