@@ -421,7 +421,7 @@ export default function CandidateList({ onAddNewCandidate, onEdit, onViewProfile
                   <tr key={c.id} className={`${selectedIds.includes(c.id) ? 'bg-blue-50' : 'hover:bg-gray-50/60'} transition-colors`}>
                     <td className="py-4 px-4"><input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggleOne(c.id)} className="rounded border-zinc-300 text-emerald-600 accent-emerald-600 checked:bg-emerald-600 checked:border-emerald-600 focus:ring-emerald-600 h-4 w-4 transition-all cursor-pointer" /></td>
                     <td className="py-4 px-6">
-                      <div className="font-bold text-gray-900">{c.firstName} {c.lastName}</div>
+                      <div className="font-bold text-gray-900 hover:text-green-900 cursor-pointer hover:underline underline-offset-2 transition-colors" onClick={() => onViewProfile(c.id)}>{c.firstName} {c.lastName}</div>
                       <div className="flex flex-col gap-0.5 text-xs text-gray-500 mt-1">
                         <a
                           href={`mailto:${c.email?.trim()}`}

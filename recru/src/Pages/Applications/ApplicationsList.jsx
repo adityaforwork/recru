@@ -1,18 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Briefcase, Users, Clock, ChevronRight, Search, Loader2, ArrowLeft, ArrowRight, Trash, Trash2 } from "lucide-react";
-
+import { useNavigate } from "react-router-dom";
 const API_BASE = "http://localhost:5000/api";
-// Pehle ye tha
-// const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired'];
-
-// Ab ye kar do - tumhare dropdown ke saare options
 const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired', 'Rejected', 'On Hold'];
 
-// Pipeline Component - Isi file me rakha hai
+// Pipeline Component 
 function RecruitmentPipeline({ candidates = [], activeStage, onStageChange }) {
   const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired', 'Rejected', 'On Hold'];
   const getCount = (stage) => candidates.filter(c => c.CurrentStage === stage).length;
-
   const getStageStyle = (stage, isActive) => {
     if (isActive) return 'bg-blue-600 text-white border-blue-600';
     if (stage === 'Rejected') return 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
@@ -72,6 +67,10 @@ export default function ApplicationsList() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [activeStage, setActiveStage] = useState('Screening'); // Default Screening kyuki tumhare 2 candidates Screening me hai
+  const navigate = useNavigate();
+  const handleViewProfile = (id) => {
+    navigate(`/candidates/${id}`);
+  };
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -147,7 +146,6 @@ export default function ApplicationsList() {
   if (selectedVacancy) {
     return (
       <div className="w-full min-h-screen bg-slate-50/50 p-4 sm:p-6 lg:p-10 space-y-6">
-
         {/* Navigation Action */}
         <button
           onClick={() => setSelectedVacancy(null)}
@@ -219,7 +217,12 @@ export default function ApplicationsList() {
                   filteredCandidates.map(app => (
                     <tr key={app.ApplicationId} className="hover:bg-slate-50/50 transition-colors duration-150 group">
                       <td className="p-4">
-                        <div className="font-semibold text-slate-800 text-[14px]">
+                        <div
+                          className="font-medium text-gray-900 hover:text-blue-600 cursor-pointer hover:underline underline-offset-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewProfile(app.candidateId) // 1059
+                          }}>
                           {app.first_name} {app.last_name}
                         </div>
                         <div className="text-xs text-slate-400 mt-0.5 font-medium">{app.email}</div>

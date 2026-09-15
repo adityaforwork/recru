@@ -1303,6 +1303,7 @@ app.get('/api/vacancies/:id/interview-applications', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 });
 
+
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on http://localhost:${PORT}`);

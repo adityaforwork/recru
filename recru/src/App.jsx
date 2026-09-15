@@ -57,6 +57,7 @@ export default function App() {
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/candidates" element={<Candidates />} />
+              <Route path="/candidates/:id" element={<Candidates />} /> 
               <Route path="/vacancies" element={<Vacancies />} />
               <Route path="/interviews" element={<Interviews />} />
               <Route path="/search" element={<SearchPage />} />

@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import CandidateList from "./CandidateList";
 import AddCandidateForm from "./CreateCandidate";
-import CandidateProfile from "./CandidateProfile"; // naya page
+import CandidateProfile from "./CandidateProfile";
+import { useParams } from "react-router-dom";
 
 export default function Candidates() {
-  const [activeView, setActiveView] = useState("list"); // 'list' | 'create' | 'edit' | 'profile'
+  const [activeView, setActiveView] = useState("list"); 
   const [selectedId, setSelectedId] = useState(null);
 
   const handleEdit = (id) => {
@@ -17,6 +18,12 @@ export default function Candidates() {
     setActiveView("profile");
   };
 
+  const {id} = useParams();
+  useEffect(() => {
+    if(id){
+      handleProfile(id)
+    }
+  }, [id]) 
   return (
     <div className="w-full flex-1">
       {activeView === "list" && (
